@@ -20,11 +20,11 @@ This will generate an executable file raytx, located in the target/release/ dire
 *Quote mint only supports wsol*
 ```
 # Buy
-./target/release/raytx swap <mint> <in-amount> 0
+./target/release/raytx buy <mint> <in-amount>
 # Sell
-./target/release/raytx swap <mint> <in-amount> 1
+./target/release/raytx sell <mint> <in-amount>
 # Sell and Close Token Account
-./target/release/raytx swap <mint> <in-amount> 11
+./target/release/raytx sell-all <mint>
 ```
 Replace <mint> with the address of the token you want to swap, and <amount> with the quantity you want to swap.
 
