@@ -1,0 +1,24 @@
+[package]
+name = "raytx"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.53"
+dotenvy = "0.15.7"
+clap = { version = "4.5.7", features = ["derive"] }
+reqwest = { version = "0.11.27", features = ["json"] }
+solana-client = "1.18.17"
+solana-sdk = "1.18.17"
+tokio = { version = "1.38.0", features = ["full"] }
+spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
+serde = "1.0.203"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+solana-account-decoder = "1.18.17"
+serde_json = "1.0.117"
+
+[dev-dependencies]
+ctor = "0.2.8"
