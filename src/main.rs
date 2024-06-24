@@ -7,7 +7,7 @@ use tracing::info;
 use solana_sdk::{pubkey::Pubkey, signature::Signer};
 
 #[derive(Parser)]
-#[command(version, about, long_about = None)]
+#[command(name = "raytx", version, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -15,13 +15,23 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    Swap {
+    #[command(about = "Buy the mint token")]
+    Buy {
         mint: String,
+        #[arg(help = "wsol amount")]
         in_amount: f64,
-        #[arg(value_parser = clap::value_parser!(u8).range(0..=11))]
-        direction: u8,
     },
+    #[command(about = "Sell the mint token")]
+    Sell {
+        mint: String,
+        #[arg(help = "mint amount")]
+        in_amount: f64,
+    },
+    #[command(about = "Sell all mint token and close the account")]
+    SellAll { mint: String },
+    #[command(about = "Wrap sol -> wsol")]
     Wrap {},
+    #[command(about = "Unwrap wsol -> sol")]
     Unwrap {},
     #[command(subcommand)]
     Token(TokenCommand),
@@ -45,14 +55,20 @@ async fn main() -> Result<()> {
     let wallet = get_wallet()?;
 
     match &cli.command {
-        Some(Command::Swap {
-            mint,
-            in_amount,
-            direction,
-        }) => {
-            info!("{} {} {}", mint, in_amount, direction);
+        Some(Command::Buy { mint, in_amount }) => {
+            info!("buy {} {}", mint, in_amount);
             let swapx = swap::Swap::new(client, wallet.pubkey());
-            swapx.swap(mint, *in_amount, *direction).await?;
+            swapx.swap(mint, *in_amount, 0).await?;
+        }
+        Some(Command::Sell { mint, in_amount }) => {
+            info!("sell {} {}", mint, in_amount);
+            let swapx = swap::Swap::new(client, wallet.pubkey());
+            swapx.swap(mint, *in_amount, 1).await?;
+        }
+        Some(Command::SellAll { mint }) => {
+            info!("sell_all {}", mint);
+            let swapx = swap::Swap::new(client, wallet.pubkey());
+            swapx.swap(mint, 0.0, 11).await?;
         }
         Some(Command::Token(token_command)) => match token_command {
             TokenCommand::List => {

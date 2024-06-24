@@ -18,6 +18,10 @@ impl Swap {
     pub fn new(client: RpcClient, pubkey: Pubkey) -> Self {
         Self { client, pubkey }
     }
+    /// direction:
+    /// * 0 buy
+    /// * 1 sell
+    /// * 11 sell all and close account
     pub async fn swap(&self, mint: &str, in_amount: f64, direction: u8) -> Result<bool> {
         let mint =
             Pubkey::from_str(mint).map_err(|e| anyhow!("failed to parse mint pubkey: {}", e))?;
@@ -38,19 +42,19 @@ impl Swap {
         match direction {
             0 => {
                 info!(
-                    "buy command: ts-node raydium/swap_test.ts {} {} {}",
+                    "buy command: npx ts-node raydium/swap_cli.ts {} {} {}",
                     pool_id, ui_amount, 0
                 );
             }
             1 => {
                 info!(
-                    "sell command: ts-node raydium/swap_test.ts {} {} {}",
+                    "sell command: npx ts-node raydium/swap_cli.ts {} {} {}",
                     pool_id, ui_amount, 1
                 );
             }
             11 => {
                 info!(
-                    "sell command: ts-node raydium/swap_test.ts {} {} {}",
+                    "sell command: npx ts-node raydium/swap_cli.ts {} {} {}",
                     pool_id, ui_amount, 11
                 );
             }
@@ -64,8 +68,9 @@ impl Swap {
     }
 
     fn swap_cli(&self, mint: &str, ui_amount: f64, direction: u8) -> Result<bool> {
-        let output: Output = Command::new("ts-node")
-            .arg("raydium/swap_test.ts")
+        let output: Output = Command::new("npx")
+            .arg("ts-node")
+            .arg("raydium/swap_cli.ts")
             .arg(mint)
             .arg(ui_amount.to_string())
             .arg(direction.to_string())
