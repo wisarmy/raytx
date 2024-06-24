@@ -63,15 +63,15 @@ impl Swap {
                 return Err(anyhow!("direction not supported: {}", direction));
             }
         }
-        let status = self.swap_cli(&mint.to_string(), ui_amount, direction)?;
+        let status = self.swap_cli(&pool_id, ui_amount, direction)?;
         Ok(status)
     }
 
-    fn swap_cli(&self, mint: &str, ui_amount: f64, direction: u8) -> Result<bool> {
+    fn swap_cli(&self, pool_id: &str, ui_amount: f64, direction: u8) -> Result<bool> {
         let output: Output = Command::new("npx")
             .arg("ts-node")
             .arg("raydium/swap_cli.ts")
-            .arg(mint)
+            .arg(pool_id)
             .arg(ui_amount.to_string())
             .arg(direction.to_string())
             .output()?;
