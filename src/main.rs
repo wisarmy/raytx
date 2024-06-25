@@ -1,8 +1,13 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
-use raytx::{get_rpc_client, get_wallet, logger, raydium::get_pool_info, swap, token};
+use clap::{ArgGroup, Parser, Subcommand};
+use raytx::{
+    get_rpc_client, get_wallet, logger,
+    raydium::get_pool_info,
+    swap::{self, SwapDirection, SwapInType},
+    token,
+};
 use std::str::FromStr;
-use tracing::info;
+use tracing::{debug, info};
 
 use solana_sdk::{pubkey::Pubkey, signature::Signer};
 
@@ -15,20 +20,21 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    #[command(about = "Buy the mint token")]
-    Buy {
+    #[command(about = "swap the mint token")]
+    #[command(group(
+        ArgGroup::new("amount")
+            .required(true)
+            .args(&["in_amount", "in_amount_pct"]),
+    ))]
+    Swap {
         mint: String,
-        #[arg(help = "wsol amount")]
-        in_amount: f64,
+        #[arg(value_enum)]
+        direction: SwapDirection,
+        #[arg(long, help = "in amount")]
+        in_amount: Option<f64>,
+        #[arg(long, help = "in amount percentage, only support sell")]
+        in_amount_pct: Option<f64>,
     },
-    #[command(about = "Sell the mint token")]
-    Sell {
-        mint: String,
-        #[arg(help = "mint amount")]
-        in_amount: f64,
-    },
-    #[command(about = "Sell all mint token and close the account")]
-    SellAll { mint: String },
     #[command(about = "Wrap sol -> wsol")]
     Wrap {},
     #[command(about = "Unwrap wsol -> sol")]
@@ -55,21 +61,27 @@ async fn main() -> Result<()> {
     let wallet = get_wallet()?;
 
     match &cli.command {
-        Some(Command::Buy { mint, in_amount }) => {
-            info!("buy {} {}", mint, in_amount);
+        Some(Command::Swap {
+            mint,
+            direction,
+            in_amount,
+            in_amount_pct,
+        }) => {
+            let (in_amount, in_type) = if let Some(in_amount) = in_amount {
+                (in_amount, SwapInType::Qty)
+            } else if let Some(in_amount) = in_amount_pct {
+                (in_amount, SwapInType::Pct)
+            } else {
+                panic!("either in_amount or in_amount_pct must be provided");
+            };
+
+            debug!("{} {:?} {:?} {:?}", mint, direction, in_amount, in_type);
             let swapx = swap::Swap::new(client, wallet.pubkey());
-            swapx.swap(mint, *in_amount, 0).await?;
+            swapx
+                .swap(mint, *in_amount, direction.clone(), in_type)
+                .await?;
         }
-        Some(Command::Sell { mint, in_amount }) => {
-            info!("sell {} {}", mint, in_amount);
-            let swapx = swap::Swap::new(client, wallet.pubkey());
-            swapx.swap(mint, *in_amount, 1).await?;
-        }
-        Some(Command::SellAll { mint }) => {
-            info!("sell_all {}", mint);
-            let swapx = swap::Swap::new(client, wallet.pubkey());
-            swapx.swap(mint, 0.0, 11).await?;
-        }
+
         Some(Command::Token(token_command)) => match token_command {
             TokenCommand::List => {
                 let token_accounts = token::token_accounts(&client, &wallet.pubkey());
