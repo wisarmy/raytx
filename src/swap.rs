@@ -95,7 +95,7 @@ impl Swap {
 
         let pool_info =
             get_pool_info(&spl_token::native_mint::id().to_string(), &mint.to_string()).await?;
-        let pool_id = pool_info.get_pool_id().unwrap();
+        let pool_id = pool_info.get_pool_id().expect("pool not found");
         match direction {
             0 => {
                 info!(
