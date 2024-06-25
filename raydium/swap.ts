@@ -16,11 +16,14 @@ import {
 import {
   LIQUIDITY_STATE_LAYOUT_V4,
   Liquidity,
+  LiquidityPoolInfo,
+  LiquidityPoolKeys,
   LiquidityPoolKeysV4,
   LiquidityStateV4,
   Percent,
   Token,
   TokenAmount,
+  WSOL,
 } from "@raydium-io/raydium-sdk";
 import {
   DefaultTransactionExecutor,
@@ -62,6 +65,7 @@ export interface BotConfig {
   unitPrice: number;
   sellSlippage: number;
   maxSellRetries: number;
+  isPump: boolean;
 }
 
 export class Bot {
@@ -81,38 +85,6 @@ export class Bot {
     accountId: PublicKey,
     poolState: LiquidityStateV4,
   ): Promise<boolean> {
-    // 坑...pump池子信息 base 与 quote 与普通池子颠倒
-    // if (poolState.quoteMint.toString().includes("pump")) {
-    if (true) {
-      const baseMint = poolState.baseMint;
-      const baseDecimal = poolState.baseDecimal;
-      // const baseVault = poolState.baseVault;
-      // const baseLotSize = poolState.baseLotSize;
-      // const baseTotalPnl = poolState.baseTotalPnl;
-      // const baseNeedTakePnl = poolState.baseNeedTakePnl;
-
-      poolState.baseMint = poolState.quoteMint;
-      poolState.baseDecimal = poolState.quoteDecimal;
-      // poolState.baseVault = poolState.quoteVault;
-      // poolState.baseLotSize = poolState.quoteLotSize;
-      // poolState.baseTotalPnl = poolState.quoteTotalPnl;
-      // poolState.baseNeedTakePnl = poolState.quoteNeedTakePnl;
-
-      poolState.quoteMint = baseMint;
-      poolState.quoteDecimal = baseDecimal;
-      // poolState.quoteVault = baseVault;
-      // poolState.quoteLotSize = baseLotSize;
-      // poolState.quoteTotalPnl = baseTotalPnl;
-      // poolState.quoteNeedTakePnl = baseNeedTakePnl;
-    }
-
-    // console.log({
-    //   baseMint: poolState.baseMint,
-    //   baseDecimal: poolState.baseDecimal,
-    //   quoteMint: poolState.quoteMint,
-    //   quoteDecimal: poolState.quoteDecimal,
-    // });
-
     logger.trace({ mint: poolState.baseMint }, `Processing new pool...`);
 
     try {
@@ -206,17 +178,6 @@ export class Bot {
     close = false,
   ): Promise<boolean> {
     try {
-      // 坑...pump池子信息 base 与 quote 与普通池子颠倒
-      // if (poolState.quoteMint.toString().includes("pump")) {
-      if (true) {
-        const baseMint = poolState.baseMint;
-        const baseDecimal = poolState.baseDecimal;
-        poolState.baseMint = poolState.quoteMint;
-        poolState.baseDecimal = poolState.quoteDecimal;
-        poolState.quoteMint = baseMint;
-        poolState.quoteDecimal = baseDecimal;
-      }
-
       logger.trace({ mint: poolState.baseMint }, `Processing new token...`);
 
       const [market, mintAta] = await Promise.all([
@@ -320,21 +281,11 @@ export class Bot {
     direction: "buy" | "sell" | "sell_and_close",
   ) {
     const slippagePercent = new Percent(slippage, 100);
-    const poolInfo = await Liquidity.fetchInfo({
-      connection: this.connection,
+    const poolInfo = await fetchPoolInfo(
+      this.connection,
       poolKeys,
-    });
-
-    // 坑...pump池子信息 base 与 quote 与普通池子颠倒
-    if (true) {
-      const baseDecimals = poolInfo.baseDecimals;
-      const baseReserve = poolInfo.baseReserve;
-      poolInfo.baseDecimals = poolInfo.quoteDecimals;
-      poolInfo.baseReserve = poolInfo.quoteReserve;
-      poolInfo.quoteDecimals = baseDecimals;
-      poolInfo.quoteReserve = baseReserve;
-    }
-
+      this.config.isPump,
+    );
     const computedAmountOut = Liquidity.computeAmountOut({
       poolKeys,
       poolInfo,
@@ -444,6 +395,27 @@ export const getPoolState = async (
     throw new Error("Failed to decode pool state");
   }
 };
+export const fetchPoolInfo = async (
+  connection: Connection,
+  poolKeys: LiquidityPoolKeys,
+  isPump: boolean,
+): Promise<LiquidityPoolInfo> => {
+  const poolInfo = await Liquidity.fetchInfo({
+    connection: connection,
+    poolKeys,
+  });
+
+  // 坑...pump池子信息 base 与 quote 与普通池子颠倒
+  if (isPump) {
+    const baseDecimals = poolInfo.baseDecimals;
+    const baseReserve = poolInfo.baseReserve;
+    poolInfo.baseDecimals = poolInfo.quoteDecimals;
+    poolInfo.baseReserve = poolInfo.quoteReserve;
+    poolInfo.quoteDecimals = baseDecimals;
+    poolInfo.quoteReserve = baseReserve;
+  }
+  return poolInfo;
+};
 
 export const swap = async (
   pool_id: string,
@@ -489,10 +461,22 @@ export const swap = async (
       buySlippage: BUY_SLIPPAGE,
       sellSlippage: SELL_SLIPPAGE,
       maxSellRetries: MAX_SELL_RETRIES,
+      isPump: false,
     };
 
     const account_id = new PublicKey(pool_id);
     const poolState = await getPoolState(connection, account_id);
+    // 坑...pump池子信息 base 与 quote 与普通池子颠倒
+    if (poolState.baseMint.toString() == WSOL.mint) {
+      const baseMint = poolState.baseMint;
+      const baseDecimal = poolState.baseDecimal;
+      poolState.baseMint = poolState.quoteMint;
+      poolState.baseDecimal = poolState.quoteDecimal;
+      poolState.quoteMint = baseMint;
+      poolState.quoteDecimal = baseDecimal;
+      // set pump
+      botConfig.isPump = true;
+    }
 
     const bot = new Bot(connection, txExecutor, botConfig);
     if (dir === 0) {
