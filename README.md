@@ -22,7 +22,7 @@ This will generate an executable file raytx, located in the target/release/ dire
 ```
 ./target/release/raytx swap <mint> buy --in-amount=<in-amount>
 ```
-### Sell with in-type, in-type default percentage，examples:
+### Sell
 ```
 # sell 50%
 ./target/release/raytx swap <mint> sell --in-amount-pct=0.5
@@ -33,7 +33,7 @@ This will generate an executable file raytx, located in the target/release/ dire
 # Sell 1000
 ./target/release/raytx swap <mint> sell --in-amount=1000
 ```
-Replace <mint> with the address of the token you want to swap, and <in-amount> with the quantity|percentage you want to swap.
+Replace <mint> with the address of the token you want to swap, and <in-amount> with the quantity|<in-amount-pct> with the percentage you want to swap.
 
 # Contributing
 Contributions to this project are welcome. If you have any questions or suggestions, feel free to raise an issue.
