@@ -95,7 +95,7 @@ app.post("/swap", async (req, res) => {
     console.error("Error during swap operation:", error);
     res
       .status(500)
-      .json({ success: false, error: "Error during swap operation" });
+      .json({ success: false, message: "Error during swap operation" });
   }
 });
 

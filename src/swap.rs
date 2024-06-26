@@ -15,6 +15,7 @@ use crate::{raydium::get_pool_info, token};
 pub struct Swap {
     client: RpcClient,
     pubkey: Pubkey,
+    swap_addr: Option<String>,
 }
 #[derive(ValueEnum, Debug, Clone)]
 pub enum SwapDirection {
@@ -37,8 +38,12 @@ pub enum SwapInType {
     Pct,
 }
 impl Swap {
-    pub fn new(client: RpcClient, pubkey: Pubkey) -> Self {
-        Self { client, pubkey }
+    pub fn new(client: RpcClient, pubkey: Pubkey, swap_addr: Option<String>) -> Self {
+        Self {
+            client,
+            pubkey,
+            swap_addr,
+        }
     }
     /// direction:
     /// * 0 buy
@@ -120,8 +125,13 @@ impl Swap {
                 return Err(anyhow!("direction not supported: {}", direction));
             }
         }
-        let status = self.swap_cli(&pool_id, ui_amount, direction)?;
-        Ok(status)
+        if self.swap_addr.is_some() {
+            let status = self.swap_api(&pool_id, ui_amount, direction).await?;
+            Ok(status)
+        } else {
+            let status = self.swap_cli(&pool_id, ui_amount, direction)?;
+            Ok(status)
+        }
     }
 
     fn swap_cli(&self, pool_id: &str, ui_amount: f64, direction: u8) -> Result<bool> {
@@ -140,5 +150,28 @@ impl Swap {
             error!("Error: {}", String::from_utf8_lossy(&output.stderr));
             Ok(false)
         }
+    }
+
+    async fn swap_api(&self, pool_id: &str, ui_amount: f64, direction: u8) -> Result<bool> {
+        let client = reqwest::Client::new();
+
+        let response = client
+            .post(
+                self.swap_addr
+                    .clone()
+                    .expect("not found raydium_server_addr"),
+            )
+            .json(&serde_json::json!({
+                "poolId": pool_id,
+                "amountIn": ui_amount,
+                "dir": direction,
+            }))
+            .send()
+            .await?;
+
+        let status = response.status().is_success();
+        let content = response.text().await?;
+        info!("swap response: {content:?}");
+        Ok(status)
     }
 }

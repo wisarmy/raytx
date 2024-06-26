@@ -76,7 +76,7 @@ async fn main() -> Result<()> {
             };
 
             debug!("{} {:?} {:?} {:?}", mint, direction, in_amount, in_type);
-            let swapx = swap::Swap::new(client, wallet.pubkey());
+            let swapx = swap::Swap::new(client, wallet.pubkey(), dotenvy::var("SWAP_ADDR").ok());
             swapx
                 .swap(mint, *in_amount, direction.clone(), in_type)
                 .await?;
