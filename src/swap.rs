@@ -1,19 +1,20 @@
 use std::{
     process::{Command, Output},
     str::FromStr,
+    sync::Arc,
 };
 
 use anyhow::{anyhow, Context, Result};
 use clap::ValueEnum;
 use rust_decimal::prelude::*;
-use solana_client::rpc_client::RpcClient;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use tracing::{error, info};
 
 use crate::{raydium::get_pool_info, token};
 
 pub struct Swap {
-    client: RpcClient,
+    client: Arc<RpcClient>,
     pubkey: Pubkey,
     swap_addr: Option<String>,
 }
@@ -38,7 +39,7 @@ pub enum SwapInType {
     Pct,
 }
 impl Swap {
-    pub fn new(client: RpcClient, pubkey: Pubkey, swap_addr: Option<String>) -> Self {
+    pub fn new(client: Arc<RpcClient>, pubkey: Pubkey, swap_addr: Option<String>) -> Self {
         Self {
             client,
             pubkey,
@@ -62,7 +63,7 @@ impl Swap {
         let mut direction: u8 = swap_direction.clone().into();
         match swap_direction {
             SwapDirection::Sell => {
-                let token_account = token::token_account(&self.client, &self.pubkey, mint)?;
+                let token_account = token::token_account(&self.client, &self.pubkey, mint).await?;
                 info!("token_account: {:#?}", token_account);
                 match in_type {
                     SwapInType::Qty => {

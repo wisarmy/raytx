@@ -4,7 +4,7 @@ use raytx::{
     get_rpc_client, get_wallet, logger,
     raydium::get_pool_info,
     swap::{self, SwapDirection, SwapInType},
-    token,
+    swap_rs, token,
 };
 use std::str::FromStr;
 use tracing::{debug, info};
@@ -34,6 +34,21 @@ enum Command {
         in_amount: Option<f64>,
         #[arg(long, help = "in amount percentage, only support sell")]
         in_amount_pct: Option<f64>,
+    },
+    #[command(about = "swap the mint token")]
+    #[command(group(
+        ArgGroup::new("amount")
+            .required(true)
+            .args(&["in_amount", "in_amount_pct"]),
+    ))]
+    SwapByRust {
+        mint: String,
+        #[arg(value_enum)]
+        direction: SwapDirection,
+        #[arg(long, help = "amount in")]
+        amount_in: Option<f64>,
+        #[arg(long, help = "amount in percentage, only support sell")]
+        amount_in_pct: Option<f64>,
     },
     #[command(about = "Wrap sol -> wsol")]
     Wrap {},
@@ -81,15 +96,35 @@ async fn main() -> Result<()> {
                 .swap(mint, *in_amount, direction.clone(), in_type)
                 .await?;
         }
+        Some(Command::SwapByRust {
+            mint,
+            direction,
+            amount_in,
+            amount_in_pct,
+        }) => {
+            let (amount_in, in_type) = if let Some(amount_in) = amount_in {
+                (amount_in, SwapInType::Qty)
+            } else if let Some(amount_in) = amount_in_pct {
+                (amount_in, SwapInType::Pct)
+            } else {
+                panic!("either in_amount or in_amount_pct must be provided");
+            };
+            debug!("{} {:?} {:?} {:?}", mint, direction, amount_in, in_type);
+
+            let swapx = swap_rs::Swap::new(client, wallet);
+            swapx
+                .swap(mint, *amount_in, direction.clone(), in_type)
+                .await?;
+        }
 
         Some(Command::Token(token_command)) => match token_command {
             TokenCommand::List => {
-                let token_accounts = token::token_accounts(&client, &wallet.pubkey());
+                let token_accounts = token::token_accounts(&client, &wallet.pubkey()).await;
                 info!("token_accounts: {:#?}", token_accounts);
             }
             TokenCommand::Show { mint } => {
                 let mint = Pubkey::from_str(mint).expect("failed to parse mint pubkey");
-                let token_account = token::token_account(&client, &wallet.pubkey(), mint)?;
+                let token_account = token::token_account(&client, &wallet.pubkey(), mint).await?;
                 info!("token_account: {:#?}", token_account);
                 let pool_info = get_pool_info(
                     &spl_token::native_mint::id().to_string(),
