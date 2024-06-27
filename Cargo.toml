@@ -22,6 +22,8 @@ solana-client = "=1.16.27"
 solana-sdk = "=1.16.27"
 solana-account-decoder = "=1.16.27"
 spl-token-client = "=0.7.1"
+raydium-library = { git = "https://github.com/raydium-io/raydium-library" }
+
 
 [dev-dependencies]
 ctor = "0.2.8"
