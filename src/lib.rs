@@ -16,6 +16,12 @@ pub fn get_rpc_client() -> Result<Arc<RpcClient>> {
     return Ok(Arc::new(client));
 }
 
+pub fn get_rpc_client_blocking() -> Result<solana_client::rpc_client::RpcClient> {
+    let cluster_url = dotenvy::var("RPC_ENDPOINT")?;
+    let client = solana_client::rpc_client::RpcClient::new(cluster_url.to_string());
+    return Ok(client);
+}
+
 pub fn get_wallet() -> Result<Keypair> {
     let wallet = Keypair::from_base58_string(&dotenvy::var("PRIVATE_KEY")?);
     return Ok(wallet);

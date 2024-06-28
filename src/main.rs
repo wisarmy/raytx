@@ -39,7 +39,7 @@ enum Command {
     #[command(group(
         ArgGroup::new("amount")
             .required(true)
-            .args(&["in_amount", "in_amount_pct"]),
+            .args(&["amount_in", "amount_in_pct"]),
     ))]
     SwapByRust {
         mint: String,
