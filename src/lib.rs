@@ -7,7 +7,7 @@ use solana_sdk::signature::Keypair;
 pub mod logger;
 pub mod raydium;
 pub mod swap;
-pub mod swap_rs;
+pub mod swap_ts;
 pub mod token;
 
 pub fn get_rpc_client() -> Result<Arc<RpcClient>> {

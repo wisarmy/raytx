@@ -20,20 +20,20 @@ This will generate an executable file raytx, located in the target/release/ dire
 *Quote mint only supports wsol*
 ### Buy
 ```
-./target/release/raytx swap <mint> buy --in-amount=<in-amount>
+./target/release/raytx swap <mint> buy --amount-in=<amount-in>
 ```
 ### Sell
 ```
 # sell 50%
-./target/release/raytx swap <mint> sell --in-amount-pct=0.5
+./target/release/raytx swap <mint> sell --amount-in-pct=0.5
 
 # sell all, close wallet ata when sell all
-./target/release/raytx swap <mint> sell --in-amount-pct=1
+./target/release/raytx swap <mint> sell --amount-in-pct=1
 
 # Sell 1000
-./target/release/raytx swap <mint> sell --in-amount=1000
+./target/release/raytx swap <mint> sell --amount-in=1000
 ```
-Replace <mint> with the address of the token you want to swap, and <in-amount> with the quantity|<in-amount-pct> with the percentage you want to swap.
+Replace <mint> with the address of the token you want to swap, and <amount-in> with the quantity|<amount-in-pct> with the percentage you want to swap.
 
 # Contributing
 Contributions to this project are welcome. If you have any questions or suggestions, feel free to raise an issue.

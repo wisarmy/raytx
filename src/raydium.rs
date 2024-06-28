@@ -38,6 +38,13 @@ impl PoolInfo {
             None
         }
     }
+    pub fn get_market_id(&self) -> Option<String> {
+        if let Some(pool) = self.data.data.first() {
+            Some(pool.market_id.clone())
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -61,6 +68,8 @@ pub struct Pool {
     pub mint_a: Mint,
     #[serde(rename = "mintB")]
     pub mint_b: Mint,
+    #[serde(rename = "marketId")]
+    pub market_id: String,
 }
 
 #[derive(Debug, Deserialize)]

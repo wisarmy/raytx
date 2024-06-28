@@ -4,7 +4,7 @@ use raytx::{
     get_rpc_client, get_wallet, logger,
     raydium::get_pool_info,
     swap::{self, SwapDirection, SwapInType},
-    swap_rs, token,
+    swap_ts, token,
 };
 use std::str::FromStr;
 use tracing::{debug, info};
@@ -20,28 +20,28 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    #[command(about = "swap the mint token")]
-    #[command(group(
-        ArgGroup::new("amount")
-            .required(true)
-            .args(&["in_amount", "in_amount_pct"]),
-    ))]
-    Swap {
-        mint: String,
-        #[arg(value_enum)]
-        direction: SwapDirection,
-        #[arg(long, help = "in amount")]
-        in_amount: Option<f64>,
-        #[arg(long, help = "in amount percentage, only support sell")]
-        in_amount_pct: Option<f64>,
-    },
-    #[command(about = "swap the mint token")]
+    #[command(about = "swap the mint token by ts")]
     #[command(group(
         ArgGroup::new("amount")
             .required(true)
             .args(&["amount_in", "amount_in_pct"]),
     ))]
-    SwapByRust {
+    SwapTs {
+        mint: String,
+        #[arg(value_enum)]
+        direction: SwapDirection,
+        #[arg(long, help = "amount in")]
+        amount_in: Option<f64>,
+        #[arg(long, help = "amount in percentage, only support sell")]
+        amount_in_pct: Option<f64>,
+    },
+    #[command(about = "swap the mint token by rs")]
+    #[command(group(
+        ArgGroup::new("amount")
+            .required(true)
+            .args(&["amount_in", "amount_in_pct"]),
+    ))]
+    Swap {
         mint: String,
         #[arg(value_enum)]
         direction: SwapDirection,
@@ -76,27 +76,7 @@ async fn main() -> Result<()> {
     let wallet = get_wallet()?;
 
     match &cli.command {
-        Some(Command::Swap {
-            mint,
-            direction,
-            in_amount,
-            in_amount_pct,
-        }) => {
-            let (in_amount, in_type) = if let Some(in_amount) = in_amount {
-                (in_amount, SwapInType::Qty)
-            } else if let Some(in_amount) = in_amount_pct {
-                (in_amount, SwapInType::Pct)
-            } else {
-                panic!("either in_amount or in_amount_pct must be provided");
-            };
-
-            debug!("{} {:?} {:?} {:?}", mint, direction, in_amount, in_type);
-            let swapx = swap::Swap::new(client, wallet.pubkey(), dotenvy::var("SWAP_ADDR").ok());
-            swapx
-                .swap(mint, *in_amount, direction.clone(), in_type)
-                .await?;
-        }
-        Some(Command::SwapByRust {
+        Some(Command::SwapTs {
             mint,
             direction,
             amount_in,
@@ -109,11 +89,35 @@ async fn main() -> Result<()> {
             } else {
                 panic!("either in_amount or in_amount_pct must be provided");
             };
-            debug!("{} {:?} {:?} {:?}", mint, direction, amount_in, in_type);
 
-            let swapx = swap_rs::Swap::new(client, wallet);
+            debug!("{} {:?} {:?} {:?}", mint, direction, amount_in, in_type);
+            let swapx = swap_ts::Swap::new(client, wallet.pubkey(), dotenvy::var("SWAP_ADDR").ok());
             swapx
                 .swap(mint, *amount_in, direction.clone(), in_type)
+                .await?;
+        }
+        Some(Command::Swap {
+            mint,
+            direction,
+            amount_in,
+            amount_in_pct,
+        }) => {
+            let (amount_in, in_type) = if let Some(amount_in) = amount_in {
+                (amount_in, SwapInType::Qty)
+            } else if let Some(amount_in) = amount_in_pct {
+                (amount_in, SwapInType::Pct)
+            } else {
+                panic!("either in_amount or in_amount_pct must be provided");
+            };
+            let slippage = dotenvy::var("SLIPPAGE").unwrap_or("5".to_string());
+            let slippage = slippage.parse::<u64>().unwrap_or(5);
+            debug!(
+                "{} {:?} {:?} {:?} slippage: {}",
+                mint, direction, amount_in, in_type, slippage
+            );
+            let swapx = swap::Swap::new(client, wallet);
+            swapx
+                .swap(mint, *amount_in, direction.clone(), in_type, slippage)
                 .await?;
         }
 
