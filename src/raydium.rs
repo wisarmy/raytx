@@ -45,6 +45,9 @@ impl PoolInfo {
             None
         }
     }
+    pub fn get_pool(&self) -> Option<Pool> {
+        self.data.data.first().cloned()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -59,7 +62,7 @@ pub struct PoolData {
     pub data: Vec<Pool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Pool {
     pub id: String,
     #[serde(rename = "programId")]
@@ -72,7 +75,7 @@ pub struct Pool {
     pub market_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Mint {
     pub address: String,
     pub symbol: String,

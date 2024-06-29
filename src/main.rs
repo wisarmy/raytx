@@ -117,7 +117,7 @@ async fn main() -> Result<()> {
             );
             let swapx = swap::Swap::new(client, wallet);
             swapx
-                .swap(mint, *amount_in, direction.clone(), in_type, slippage)
+                .swap2(mint, *amount_in, direction.clone(), in_type, slippage)
                 .await?;
         }
 
