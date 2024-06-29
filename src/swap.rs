@@ -56,208 +56,6 @@ impl Swap {
     fn keypair(&self) -> Keypair {
         Keypair::from_bytes(&self.keypair.to_bytes()).expect("failed to copy keypair")
     }
-    pub async fn swap2(
-        &self,
-        mint: &str,
-        amount_in: f64,
-        swap_direction: SwapDirection,
-        in_type: SwapInType,
-        slippage: u64,
-    ) -> Result<bool> {
-        // slippage_bps = 50u64; // 0.5%
-        let slippage_bps = slippage * 100;
-        let owner = self.keypair.pubkey();
-        let base_mint =
-            Pubkey::from_str(mint).map_err(|e| anyhow!("failed to parse mint pubkey: {}", e))?;
-        let program_client = self.program_client();
-        let program_id = spl_token::ID;
-        let quote_mint = spl_token::native_mint::ID;
-
-        let base_client = Token::new(
-            program_client.clone(),
-            &program_id,
-            &base_mint,
-            None,
-            Arc::new(self.keypair()),
-        );
-        let quote_client = Token::new(
-            program_client.clone(),
-            &program_id,
-            &quote_mint,
-            None,
-            Arc::new(self.keypair()),
-        );
-
-        let base_ata = base_client.get_associated_token_address(&owner);
-        let quote_ata = quote_client.get_associated_token_address(&owner);
-
-        let mut create_instruction = None;
-        let close_instruction = None;
-        let swap_base_in: bool;
-
-        let (direction, amount_specified, amount_ui_pretty) = match swap_direction {
-            SwapDirection::Buy => {
-                // Create base ATA if it doesn't exist.
-                match base_client.get_account_info(&base_ata).await {
-                    Ok(_) => debug!("base ata exists. skipping creation.."),
-                    Err(TokenError::AccountNotFound) | Err(TokenError::AccountInvalidOwner) => {
-                        info!("base ATA does not exist. will be create");
-                        // token_out_client
-                        //     .create_associated_token_account(&owner)
-                        //     .await?;
-                        create_instruction = Some(create_associated_token_account(
-                            &owner,
-                            &owner,
-                            &base_mint,
-                            &program_id,
-                        ));
-                    }
-                    Err(error) => error!("error retrieving out ATA: {}", error),
-                }
-
-                (
-                    amm::utils::SwapDirection::PC2Coin,
-                    ui_amount_to_amount(amount_in, spl_token::native_mint::DECIMALS),
-                    format!("{} {}", amount_in, quote_mint),
-                )
-            }
-            SwapDirection::Sell => {
-                let base_account_info = base_client.get_account_info(&base_ata).await?;
-                let base_mint_info = base_client.get_mint_info().await?;
-                let amount = match in_type {
-                    SwapInType::Qty => ui_amount_to_amount(amount_in, base_mint_info.base.decimals),
-                    SwapInType::Pct => {
-                        let amount_in_pct = amount_in.min(1.0);
-                        info!("amount_in_pct: {}, amount_in: {}", amount_in_pct, amount_in);
-                        if amount_in_pct == 1.0 {
-                            // sell all, close ata
-                            info!("sell all. will be close ATA");
-                            base_account_info.base.amount
-                            // close_instruction = Some(spl_token::instruction::close_account(
-                            //     &owner,
-                            //     &in_ata,
-                            //     &owner,
-                            //     &owner,
-                            //     &vec![&owner],
-                            // )?);
-                        } else {
-                            (amount_in_pct * 100.0) as u64 * base_account_info.base.amount / 100
-                        }
-                    }
-                };
-                (
-                    amm::utils::SwapDirection::Coin2PC,
-                    amount,
-                    format!(
-                        "{}({})",
-                        amount_to_ui_amount(amount, base_mint_info.base.decimals),
-                        base_mint
-                    ),
-                )
-            }
-        };
-
-        let amm_program = Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8")?;
-        let market_program = Pubkey::from_str("srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX")?;
-        let pool_info = get_pool_info(&base_mint.to_string(), &quote_mint.to_string()).await?;
-        let pool = pool_info.get_pool().with_context(|| "failed get pool")?;
-
-        let market_id = Pubkey::from_str(
-            &pool_info
-                .get_market_id()
-                .with_context(|| "failed to get pool market id")?,
-        )?;
-        let amm_pool_id = Pubkey::from_str(
-            &pool_info
-                .get_pool_id()
-                .with_context(|| "failed to get pool id")?,
-        )?;
-        debug!("amm pool id: {amm_pool_id}");
-        let client = get_rpc_client_blocking()?;
-
-        let (coin_mint, pc_mint) = if pool.mint_a.address == quote_mint.to_string() {
-            swap_base_in = true;
-            (quote_mint, base_mint)
-        } else {
-            swap_base_in = false;
-            (base_mint, quote_mint)
-        };
-        // load amm keys
-        let amm_keys = raydium_library::amm::utils::get_amm_pda_keys(
-            &amm_program,
-            &market_program,
-            &market_id,
-            &coin_mint,
-            &pc_mint,
-        )?;
-        debug!("amm_keys: {amm_keys:#?}");
-        // load market keys
-        let market_keys = raydium_library::amm::openbook::get_keys_for_market(
-            &client,
-            &amm_keys.market_program,
-            &amm_keys.market,
-        )
-        .inspect_err(|e| {
-            error!("failed to get market_keys: {}", e);
-        })?;
-        // calculate amm pool vault with load data at the same time or use simulate to calculate
-        let result = raydium_library::amm::calculate_pool_vault_amounts(
-            &client,
-            &amm_program,
-            &amm_pool_id,
-            &amm_keys,
-            &market_keys,
-            raydium_library::amm::utils::CalculateMethod::Simulate(owner),
-        )?;
-        debug!("calculate_pool result: {:#?}", result);
-
-        info!(
-            "swap_base_in: {}, direction: {:?}, amount_ui_pretty: {}",
-            swap_base_in, swap_direction, amount_ui_pretty,
-        );
-
-        let other_amount_threshold = raydium_library::amm::swap_with_slippage(
-            result.pool_pc_vault_amount,
-            result.pool_coin_vault_amount,
-            result.swap_fee_numerator,
-            result.swap_fee_denominator,
-            direction,
-            amount_specified,
-            swap_base_in,
-            slippage_bps,
-        )?;
-        // build swap instruction
-        let build_swap_instruction = raydium_library::amm::swap(
-            &amm_program,
-            &amm_keys,
-            &market_keys,
-            &owner,
-            &base_ata,
-            &quote_ata,
-            amount_specified,
-            other_amount_threshold,
-            swap_base_in,
-        )?;
-        // build instructions
-        let mut instructions = vec![build_swap_instruction];
-        if let Some(create_instruction) = create_instruction {
-            instructions.push(create_instruction);
-        }
-        if let Some(close_instruction) = close_instruction {
-            instructions.push(close_instruction);
-        }
-
-        // send init tx
-        let txn = Transaction::new_signed_with_payer(
-            &instructions,
-            Some(&owner),
-            &vec![&self.keypair],
-            client.get_latest_blockhash()?,
-        );
-        let sig = raydium_library::common::rpc::send_txn(&client, &txn, true)?;
-        info!("signature: {:?}", sig);
-        Ok(true)
-    }
 
     pub async fn swap(
         &self,
@@ -301,46 +99,69 @@ impl Swap {
         let in_ata = token_in_client.get_associated_token_address(&owner);
         let in_account = token_in_client.get_account_info(&in_ata).await?;
         let in_mint = token_in_client.get_mint_info().await?;
-        // If input token is the native mint(wSOL) and the balance is inadequate, attempt to
-        // convert SOL to wSOL.
-        let in_balance = in_account.base.amount;
-        // ui amount -> amount
-        let mut amount_specified = ui_amount_to_amount(amount_in, in_mint.base.decimals);
-        if in_account.base.is_native() && in_balance < amount_specified {
-            let transfer_amt = amount_specified - in_balance;
-            let blockhash = self.client.get_latest_blockhash().await?;
-            let transfer_instruction =
-                solana_sdk::system_instruction::transfer(&owner, &in_ata, transfer_amt);
-            let sync_instruction = spl_token::instruction::sync_native(&program_id, &in_ata)?;
-            let tx = Transaction::new_signed_with_payer(
-                &[transfer_instruction, sync_instruction],
-                Some(&owner),
-                &[&self.keypair],
-                blockhash,
-            );
-            self.client.send_and_confirm_transaction(&tx).await.unwrap();
-        }
-
-        // Create the out ATA if it doesn't exist.
         let out_ata = token_out_client.get_associated_token_address(&owner);
-        debug!("out ATA={}", out_ata);
+
         let mut create_instruction = None;
-        match token_out_client.get_account_info(&out_ata).await {
-            Ok(_) => debug!("out ata exists. skipping creation.."),
-            Err(TokenError::AccountNotFound) | Err(TokenError::AccountInvalidOwner) => {
-                info!("out ATA does not exist. will be create");
-                // token_out_client
-                //     .create_associated_token_account(&owner)
-                //     .await?;
-                create_instruction = Some(create_associated_token_account(
-                    &owner,
-                    &owner,
-                    &token_out,
-                    &program_id,
-                ));
+        let close_instruction = None;
+        let swap_base_in = false;
+
+        let (amount_specified, amount_ui_pretty) = match swap_direction {
+            SwapDirection::Buy => {
+                // Create base ATA if it doesn't exist.
+                match token_out_client.get_account_info(&out_ata).await {
+                    Ok(_) => debug!("base ata exists. skipping creation.."),
+                    Err(TokenError::AccountNotFound) | Err(TokenError::AccountInvalidOwner) => {
+                        info!("base ATA does not exist. will be create");
+                        // token_out_client
+                        //     .create_associated_token_account(&owner)
+                        //     .await?;
+                        create_instruction = Some(create_associated_token_account(
+                            &owner,
+                            &owner,
+                            &token_out,
+                            &program_id,
+                        ));
+                    }
+                    Err(error) => error!("error retrieving out ATA: {}", error),
+                }
+
+                (
+                    ui_amount_to_amount(amount_in, spl_token::native_mint::DECIMALS),
+                    format!("{}({})", amount_in, token_in),
+                )
             }
-            Err(error) => error!("error retrieving out ATA: {}", error),
-        }
+            SwapDirection::Sell => {
+                let amount = match in_type {
+                    SwapInType::Qty => ui_amount_to_amount(amount_in, in_mint.base.decimals),
+                    SwapInType::Pct => {
+                        let amount_in_pct = amount_in.min(1.0);
+                        info!("amount_in_pct: {}, amount_in: {}", amount_in_pct, amount_in);
+                        if amount_in_pct == 1.0 {
+                            // sell all, close ata
+                            info!("sell all. will be close ATA");
+                            in_account.base.amount
+                            // close_instruction = Some(spl_token::instruction::close_account(
+                            //     &owner,
+                            //     &in_ata,
+                            //     &owner,
+                            //     &owner,
+                            //     &vec![&owner],
+                            // )?);
+                        } else {
+                            (amount_in_pct * 100.0) as u64 * in_account.base.amount / 100
+                        }
+                    }
+                };
+                (
+                    amount,
+                    format!(
+                        "{}({})",
+                        amount_to_ui_amount(amount, in_mint.base.decimals),
+                        token_in
+                    ),
+                )
+            }
+        };
 
         let amm_program = Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8")?;
         let market_program = Pubkey::from_str("srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX")?;
@@ -356,23 +177,15 @@ impl Swap {
         )?;
         debug!("amm pool id: {amm_pool_id}");
         let client = get_rpc_client_blocking()?;
-        let mut swap_base_in = false;
 
         // load amm keys
-        let amm_keys_pda = raydium_library::amm::utils::get_amm_pda_keys(
+        let amm_keys = raydium_library::amm::utils::get_amm_pda_keys(
             &amm_program,
             &market_program,
             &market_id,
             &mint,
             &native_mint,
         )?;
-        // debug!("amm_keys_pda: {amm_keys_pda:#?}");
-        let amm_keys = amm_keys_pda;
-        // let amm_keys =
-        //     raydium_library::amm::utils::load_amm_keys(&client, &amm_program, &amm_pool_id)
-        //         .inspect_err(|e| {
-        //             error!("failed to get amm_keys: {}", e);
-        //         })?;
         debug!("amm_keys: {amm_keys:#?}");
         // load market keys
         let market_keys = raydium_library::amm::openbook::get_keys_for_market(
@@ -393,48 +206,16 @@ impl Swap {
             raydium_library::amm::utils::CalculateMethod::Simulate(owner),
         )?;
         debug!("calculate_pool result: {:#?}", result);
-        let close_instruction = None;
+        // setting direction
         let direction = if token_in == amm_keys.amm_coin_mint && token_out == amm_keys.amm_pc_mint {
-            info!("sell {}", token_in);
-            // if sell, use swap in type
-            match in_type {
-                SwapInType::Qty => {
-                    amount_specified = amount_specified.min(in_account.base.amount);
-                }
-                SwapInType::Pct => {
-                    let amount_in_pct = amount_in.min(1.0);
-                    info!("amount_in_pct: {}, amount_in: {}", amount_in_pct, amount_in);
-                    if amount_in_pct == 1.0 {
-                        // sell all, close ata
-                        info!("sell all. will be close ATA");
-                        amount_specified = in_account.base.amount;
-                        // close_instruction = Some(spl_token::instruction::close_account(
-                        //     &owner,
-                        //     &in_ata,
-                        //     &owner,
-                        //     &owner,
-                        //     &vec![&owner],
-                        // )?);
-                    } else {
-                        amount_specified =
-                            (amount_in_pct * 100.0) as u64 * in_account.base.amount / 100;
-                    }
-                }
-            }
             amm::utils::SwapDirection::Coin2PC
         } else {
-            info!("buy {}", token_out);
-            // if buy, use swap_base_in
-            swap_base_in = true;
             amm::utils::SwapDirection::PC2Coin
         };
 
         info!(
             "swap[{}]: {} -> {} -> {}",
-            swap_base_in,
-            token_in,
-            amount_to_ui_amount(amount_specified, in_mint.base.decimals),
-            token_out
+            swap_base_in, token_in, amount_ui_pretty, token_out
         );
         let other_amount_threshold = raydium_library::amm::swap_with_slippage(
             result.pool_pc_vault_amount,
@@ -458,6 +239,10 @@ impl Swap {
             other_amount_threshold,
             swap_base_in,
         )?;
+        info!(
+            "amount_specified: {}, other_amount_threshold: {}",
+            amount_specified, other_amount_threshold
+        );
         // build instructions
         let mut instructions = vec![build_swap_instruction];
         if let Some(create_instruction) = create_instruction {
