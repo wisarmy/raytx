@@ -183,7 +183,7 @@ impl Swap {
             (base_mint, quote_mint)
         };
         // load amm keys
-        let mut amm_keys = raydium_library::amm::utils::get_amm_pda_keys(
+        let amm_keys = raydium_library::amm::utils::get_amm_pda_keys(
             &amm_program,
             &market_program,
             &market_id,
