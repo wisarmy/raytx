@@ -5,7 +5,7 @@ use clap::ValueEnum;
 use raydium_library::amm;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer, transaction::Transaction};
-use spl_associated_token_account::instruction::create_associated_token_account;
+// use spl_associated_token_account::instruction::create_associated_token_account;
 use spl_token::{amount_to_ui_amount, ui_amount_to_amount};
 use spl_token_client::{
     client::{ProgramClient, ProgramRpcClient, ProgramRpcClientSendTransaction},
@@ -101,7 +101,7 @@ impl Swap {
         let in_mint = token_in_client.get_mint_info().await?;
         let out_ata = token_out_client.get_associated_token_address(&owner);
 
-        let mut create_instruction = None;
+        let create_instruction = None;
         let mut close_instruction = None;
         let swap_base_in = true;
 
@@ -111,16 +111,19 @@ impl Swap {
                 match token_out_client.get_account_info(&out_ata).await {
                     Ok(_) => debug!("base ata exists. skipping creation.."),
                     Err(TokenError::AccountNotFound) | Err(TokenError::AccountInvalidOwner) => {
-                        info!("base ATA does not exist. will be create");
-                        // token_out_client
-                        //     .create_associated_token_account(&owner)
-                        //     .await?;
-                        create_instruction = Some(create_associated_token_account(
-                            &owner,
-                            &owner,
-                            &token_out,
-                            &program_id,
-                        ));
+                        info!(
+                            "base ATA for mint {} does not exist. will be create",
+                            token_out
+                        );
+                        token_out_client
+                            .create_associated_token_account(&owner)
+                            .await?;
+                        // create_instruction = Some(create_associated_token_account(
+                        //     &owner,
+                        //     &owner,
+                        //     &token_out,
+                        //     &program_id,
+                        // ));
                     }
                     Err(error) => error!("error retrieving out ATA: {}", error),
                 }
