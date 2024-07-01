@@ -1,15 +1,24 @@
+use std::sync::Arc;
+
 use anyhow::Result;
-use solana_client::rpc_client::RpcClient;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::Keypair;
 
 pub mod logger;
 pub mod raydium;
 pub mod swap;
+pub mod swap_ts;
 pub mod token;
 
-pub fn get_rpc_client() -> Result<RpcClient> {
+pub fn get_rpc_client() -> Result<Arc<RpcClient>> {
     let cluster_url = dotenvy::var("RPC_ENDPOINT")?;
     let client = RpcClient::new(cluster_url.to_string());
+    return Ok(Arc::new(client));
+}
+
+pub fn get_rpc_client_blocking() -> Result<solana_client::rpc_client::RpcClient> {
+    let cluster_url = dotenvy::var("RPC_ENDPOINT")?;
+    let client = solana_client::rpc_client::RpcClient::new(cluster_url.to_string());
     return Ok(client);
 }
 

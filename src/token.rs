@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use solana_account_decoder::UiAccountData;
-use solana_client::{rpc_client::RpcClient, rpc_request::TokenAccountsFilter};
+use solana_client::{nonblocking::rpc_client::RpcClient, rpc_request::TokenAccountsFilter};
 use solana_sdk::pubkey::Pubkey;
 use tracing::trace;
 
@@ -46,28 +46,35 @@ struct Amount {
     ui_amount_string: String,
 }
 
-pub fn token_account(client: &RpcClient, owner: &Pubkey, mint: Pubkey) -> Result<TokenAccount> {
-    let token_accounts = token_accounts_filter(client, owner, TokenAccountsFilter::Mint(mint))?;
+pub async fn token_account(
+    client: &RpcClient,
+    owner: &Pubkey,
+    mint: Pubkey,
+) -> Result<TokenAccount> {
+    let token_accounts =
+        token_accounts_filter(client, owner, TokenAccountsFilter::Mint(mint)).await?;
     token_accounts
         .first()
         .cloned()
         .ok_or(anyhow!("no token account found"))
 }
 
-pub fn token_accounts(client: &RpcClient, owner: &Pubkey) -> Result<TokenAccounts> {
+pub async fn token_accounts(client: &RpcClient, owner: &Pubkey) -> Result<TokenAccounts> {
     token_accounts_filter(
         client,
         owner,
         TokenAccountsFilter::ProgramId(spl_token::id()),
     )
+    .await
 }
-fn token_accounts_filter(
+async fn token_accounts_filter(
     client: &RpcClient,
     owner: &Pubkey,
     filter: TokenAccountsFilter,
 ) -> Result<TokenAccounts> {
     let token_accounts = client
         .get_token_accounts_by_owner(owner, filter)
+        .await
         .expect("Failed to get token accounts");
 
     trace!("token_accounts: {:#?}", token_accounts);
@@ -100,13 +107,13 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
     use std::str::FromStr;
 
-    #[test]
-    pub fn test_token_account() {
+    #[tokio::test]
+    pub async fn test_token_account() {
         let client = get_rpc_client().unwrap();
         let owner = Pubkey::from_str("AAf6DN1Wkh4TKvqxVX1xLfEKRtZNSZKwrHsr3NL2Wphm")
             .expect("failed to parse owner pubkey");
         let mint = spl_token::native_mint::id();
-        let token_account = token_account(&client, &owner, mint).unwrap();
+        let token_account = token_account(&client, &owner, mint).await.unwrap();
         assert_eq!(
             token_account.pubkey,
             "C4rpfuopbU2q8kmn9panVsi2NkXW2uQaubmFSx9XCi1H"

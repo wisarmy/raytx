@@ -5,8 +5,12 @@ use serde::Deserialize;
 // 获取池子信息
 // https://api-v3.raydium.io/pools/info/mint?mint1=So11111111111111111111111111111111111111112&mint2=EzM2d8JVpzfhV7km3tUsR1U1S4xwkrPnWkM4QFeTpump&poolType=standard&poolSortField=default&sortType=desc&pageSize=10&page=1
 pub async fn get_pool_info(mint1: &str, mint2: &str) -> Result<PoolInfo> {
-    let proxy = Proxy::all("http://127.0.0.1:1087")?;
-    let client = reqwest::Client::builder().proxy(proxy).build()?;
+    let mut client_builder = reqwest::Client::builder();
+    if let Ok(http_proxy) = dotenvy::var("HTTP_PROXY") {
+        let proxy = Proxy::all(http_proxy)?;
+        client_builder = client_builder.proxy(proxy);
+    }
+    let client = client_builder.build()?;
 
     let result = client
         .get("https://api-v3.raydium.io/pools/info/mint")
@@ -34,6 +38,16 @@ impl PoolInfo {
             None
         }
     }
+    pub fn get_market_id(&self) -> Option<String> {
+        if let Some(pool) = self.data.data.first() {
+            Some(pool.market_id.clone())
+        } else {
+            None
+        }
+    }
+    pub fn get_pool(&self) -> Option<Pool> {
+        self.data.data.first().cloned()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,7 +62,7 @@ pub struct PoolData {
     pub data: Vec<Pool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Pool {
     pub id: String,
     #[serde(rename = "programId")]
@@ -57,9 +71,11 @@ pub struct Pool {
     pub mint_a: Mint,
     #[serde(rename = "mintB")]
     pub mint_b: Mint,
+    #[serde(rename = "marketId")]
+    pub market_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Mint {
     pub address: String,
     pub symbol: String,
