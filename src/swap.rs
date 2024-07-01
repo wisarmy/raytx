@@ -102,8 +102,8 @@ impl Swap {
         let out_ata = token_out_client.get_associated_token_address(&owner);
 
         let mut create_instruction = None;
-        let close_instruction = None;
-        let swap_base_in = false;
+        let mut close_instruction = None;
+        let swap_base_in = true;
 
         let (amount_specified, amount_ui_pretty) = match swap_direction {
             SwapDirection::Buy => {
@@ -138,15 +138,15 @@ impl Swap {
                         info!("amount_in_pct: {}, amount_in: {}", amount_in_pct, amount_in);
                         if amount_in_pct == 1.0 {
                             // sell all, close ata
-                            info!("sell all. will be close ATA");
+                            info!("sell all. will be close ATA for mint {}", token_in);
+                            close_instruction = Some(spl_token::instruction::close_account(
+                                &program_id,
+                                &in_ata,
+                                &owner,
+                                &owner,
+                                &vec![&owner],
+                            )?);
                             in_account.base.amount
-                            // close_instruction = Some(spl_token::instruction::close_account(
-                            //     &owner,
-                            //     &in_ata,
-                            //     &owner,
-                            //     &owner,
-                            //     &vec![&owner],
-                            // )?);
                         } else {
                             (amount_in_pct * 100.0) as u64 * in_account.base.amount / 100
                         }
@@ -179,12 +179,14 @@ impl Swap {
         let client = get_rpc_client_blocking()?;
 
         // load amm keys
+        // since load_amm_keys is not available, get_amm_pda_keys is used here,
+        // and the parameters(coin_mint, pc_mint) look a little strange.
         let amm_keys = raydium_library::amm::utils::get_amm_pda_keys(
             &amm_program,
             &market_program,
             &market_id,
-            &mint,
-            &native_mint,
+            &token_out,
+            &token_in,
         )?;
         debug!("amm_keys: {amm_keys:#?}");
         // load market keys
@@ -244,12 +246,18 @@ impl Swap {
             amount_specified, other_amount_threshold
         );
         // build instructions
-        let mut instructions = vec![build_swap_instruction];
+        let mut instructions = vec![];
+        if amount_specified > 0 {
+            instructions.push(build_swap_instruction)
+        }
         if let Some(create_instruction) = create_instruction {
             instructions.push(create_instruction);
         }
         if let Some(close_instruction) = close_instruction {
             instructions.push(close_instruction);
+        }
+        if instructions.len() == 0 {
+            return Err(anyhow!("instructions is empty, no tx required"));
         }
 
         // send init tx
