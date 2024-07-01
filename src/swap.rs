@@ -138,7 +138,6 @@ impl Swap {
                     SwapInType::Qty => ui_amount_to_amount(amount_in, in_mint.base.decimals),
                     SwapInType::Pct => {
                         let amount_in_pct = amount_in.min(1.0);
-                        info!("amount_in_pct: {}, amount_in: {}", amount_in_pct, amount_in);
                         if amount_in_pct == 1.0 {
                             // sell all, close ata
                             info!("sell all. will be close ATA for mint {}", token_in);
@@ -219,8 +218,8 @@ impl Swap {
         };
 
         info!(
-            "swap[{}]: {} -> {} -> {}",
-            swap_base_in, token_in, amount_ui_pretty, token_out
+            "swap: {} -> {} -> {}",
+            token_in, amount_ui_pretty, token_out
         );
         let other_amount_threshold = raydium_library::amm::swap_with_slippage(
             result.pool_pc_vault_amount,
