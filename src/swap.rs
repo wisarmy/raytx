@@ -183,13 +183,29 @@ impl Swap {
         // load amm keys
         // since load_amm_keys is not available, get_amm_pda_keys is used here,
         // and the parameters(coin_mint, pc_mint) look a little strange.
-        let amm_keys = raydium_library::amm::utils::get_amm_pda_keys(
-            &amm_program,
-            &market_program,
-            &market_id,
-            &token_out,
-            &token_in,
-        )?;
+        let amm_keys = if pool_info
+            .get_pool()
+            .ok_or(anyhow!("failed to get pool"))?
+            .mint_a
+            .address
+            == native_mint.to_string()
+        {
+            raydium_library::amm::utils::get_amm_pda_keys(
+                &amm_program,
+                &market_program,
+                &market_id,
+                &token_out,
+                &token_in,
+            )?
+        } else {
+            raydium_library::amm::utils::get_amm_pda_keys(
+                &amm_program,
+                &market_program,
+                &market_id,
+                &token_in,
+                &token_out,
+            )?
+        };
         debug!("amm_keys: {amm_keys:#?}");
         // load market keys
         let market_keys = raydium_library::amm::openbook::get_keys_for_market(
