@@ -10,7 +10,7 @@ build = "build.rs"
 anyhow = "1.0.53"
 dotenvy = "0.15.7"
 clap = { version = "4.5.7", features = ["derive"] }
-reqwest = { version = "0.11.27", features = ["json"] }
+reqwest = { version = "0.11.27", features = ["json", "socks", "native-tls"] }
 tokio = { version = "1.38.0", features = ["full"] }
 serde = "1.0.203"
 tracing = "0.1.40"
@@ -30,6 +30,8 @@ spl-token-2022 = { version = "0.9.0", features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "2.2.0", features = [
     "no-entrypoint",
 ] }
+tokio-tungstenite = { version = "0.23.1", features = ["native-tls"] }
+futures-util = "0.3.30"
 
 [dev-dependencies]
 ctor = "0.2.8"
