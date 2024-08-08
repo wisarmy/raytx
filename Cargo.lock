@@ -2330,6 +2330,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
 
 [[package]]
+name = "jito-block-engine-json-rpc-client"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "log",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "solana-rpc-client",
+ "solana-rpc-client-api",
+ "solana-sdk",
+ "solana-transaction-status",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "jobserver"
 version = "0.1.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3570,6 +3588,8 @@ dependencies = [
  "ctor",
  "dotenvy",
  "futures-util",
+ "jito-block-engine-json-rpc-client",
+ "rand 0.8.5",
  "raydium-library",
  "raydium_amm",
  "reqwest",

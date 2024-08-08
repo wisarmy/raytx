@@ -33,5 +33,8 @@ spl-associated-token-account = { version = "2.2.0", features = [
 tokio-tungstenite = { version = "0.23.1", features = ["native-tls"] }
 futures-util = "0.3.30"
 
+jito-json-rpc-client = { path = "jito/json-rpc-client", package = "jito-block-engine-json-rpc-client" }
+rand = "0.8.5"
+
 [dev-dependencies]
 ctor = "0.2.8"

@@ -1,7 +1,9 @@
 use anyhow::Result;
 use clap::{ArgGroup, Parser, Subcommand};
 use raytx::{
-    get_rpc_client, get_wallet, logger,
+    get_rpc_client, get_wallet,
+    jito::{init_tip_accounts, ws::run_tip_stream},
+    logger,
     raydium::get_pool_info,
     swap::{self, SwapDirection, SwapInType},
     swap_ts, token,
@@ -49,6 +51,8 @@ enum Command {
         amount_in: Option<f64>,
         #[arg(long, help = "amount in percentage, only support sell")]
         amount_in_pct: Option<f64>,
+        #[arg(long, help = "use jito to swap", default_value_t = false)]
+        jito: bool,
     },
     #[command(about = "Wrap sol -> wsol")]
     Wrap {},
@@ -101,6 +105,7 @@ async fn main() -> Result<()> {
             direction,
             amount_in,
             amount_in_pct,
+            jito,
         }) => {
             let (amount_in, in_type) = if let Some(amount_in) = amount_in {
                 (amount_in, SwapInType::Qty)
@@ -115,9 +120,27 @@ async fn main() -> Result<()> {
                 "{} {:?} {:?} {:?} slippage: {}",
                 mint, direction, amount_in, in_type, slippage
             );
+            // jito
+            if *jito {
+                init_tip_accounts().await.unwrap();
+                tokio::spawn(async {
+                    if let Err(e) = run_tip_stream().await {
+                        println!("Error: {:?}", e);
+                    }
+                });
+                info!("waiting 5s for get tip percentiles data");
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            }
             let swapx = swap::Swap::new(client, wallet);
             swapx
-                .swap(mint, *amount_in, direction.clone(), in_type, slippage)
+                .swap(
+                    mint,
+                    *amount_in,
+                    direction.clone(),
+                    in_type,
+                    slippage,
+                    *jito,
+                )
                 .await?;
         }
 

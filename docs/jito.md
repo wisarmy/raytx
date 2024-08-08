@@ -31,6 +31,8 @@ T1pyyaTNZsKv2WcRAB8oVnk93mLJw2XzjtVYqCsaHqt
 4R3gSG8BpU4t19KYj8CfnbtRpnT8gtk4dvTHxVRwc2r7
 ## WebSocket showing tip amounts:
 ws://bundles-api-rest.jito.wtf/api/v1/bundles/tip_stream
+## Tip dashoard
+https://jito-labs.metabaseapp.com/public/dashboard/016d4d60-e168-4a8f-93c7-4cd5ec6c7c8d
 
 # Mainnet Addresses
 ## Amsterdam

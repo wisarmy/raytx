@@ -4,8 +4,15 @@ use anyhow::{anyhow, Context, Result};
 use clap::ValueEnum;
 use raydium_library::amm;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer, transaction::Transaction};
+use solana_sdk::{
+    pubkey::Pubkey,
+    signature::Keypair,
+    signer::Signer,
+    system_transaction,
+    transaction::{Transaction, VersionedTransaction},
+};
 // use spl_associated_token_account::instruction::create_associated_token_account;
+use jito_json_rpc_client::jsonrpc_client::rpc_client::RpcClient as JitoRpcClient;
 use spl_token::{amount_to_ui_amount, ui_amount_to_amount};
 use spl_token_client::{
     client::{ProgramClient, ProgramRpcClient, ProgramRpcClientSendTransaction},
@@ -14,7 +21,11 @@ use spl_token_client::{
 
 use tracing::{debug, error, info};
 
-use crate::{get_rpc_client_blocking, raydium::get_pool_info};
+use crate::{
+    get_rpc_client_blocking,
+    jito::{self, get_tip_account, get_tip_value},
+    raydium::get_pool_info,
+};
 
 pub struct Swap {
     client: Arc<RpcClient>,
@@ -64,6 +75,7 @@ impl Swap {
         swap_direction: SwapDirection,
         in_type: SwapInType,
         slippage: u64,
+        use_jito: bool,
     ) -> Result<bool> {
         // slippage_bps = 50u64; // 0.5%
         let slippage_bps = slippage * 100;
@@ -279,14 +291,44 @@ impl Swap {
         }
 
         // send init tx
+        let recent_blockhash = client.get_latest_blockhash()?;
         let txn = Transaction::new_signed_with_payer(
             &instructions,
             Some(&owner),
             &vec![&self.keypair],
-            client.get_latest_blockhash()?,
+            recent_blockhash,
         );
-        let sig = raydium_library::common::rpc::send_txn(&client, &txn, true)?;
-        info!("signature: {:?}", sig);
+
+        if use_jito {
+            // jito
+            let tip_account = get_tip_account().await?;
+            let jito_client = JitoRpcClient::new(format!(
+                "{}/api/v1/bundles",
+                jito::BLOCK_ENGINE_URL.to_string()
+            ));
+            // jito tip
+            let tip = get_tip_value().await?;
+            let tip_lamports = ui_amount_to_amount(tip, spl_token::native_mint::DECIMALS);
+            info!(
+                "tip account: {}, tip(sol): {}, lamports: {}",
+                tip_account, tip, tip_lamports
+            );
+            // tip tx
+            let mut bundle: Vec<VersionedTransaction> = vec![];
+            bundle.push(VersionedTransaction::from(txn));
+            bundle.push(VersionedTransaction::from(system_transaction::transfer(
+                &self.keypair,
+                &tip_account,
+                tip_lamports,
+                recent_blockhash,
+            )));
+            let bundle_id = jito_client.send_bundle(&bundle).await?;
+            info!("bundle_id: {}", bundle_id);
+        } else {
+            let sig = raydium_library::common::rpc::send_txn(&client, &txn, true)?;
+            info!("signature: {:?}", sig);
+        }
+
         Ok(true)
     }
 }
