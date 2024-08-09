@@ -142,7 +142,7 @@ impl Swap {
 
                 (
                     ui_amount_to_amount(amount_in, spl_token::native_mint::DECIMALS),
-                    format!("{}({})", amount_in, token_in),
+                    (amount_in, spl_token::native_mint::DECIMALS),
                 )
             }
             SwapDirection::Sell => {
@@ -168,10 +168,9 @@ impl Swap {
                 };
                 (
                     amount,
-                    format!(
-                        "{}({})",
+                    (
                         amount_to_ui_amount(amount, in_mint.base.decimals),
-                        token_in
+                        in_mint.base.decimals,
                     ),
                 )
             }
@@ -195,29 +194,13 @@ impl Swap {
         // load amm keys
         // since load_amm_keys is not available, get_amm_pda_keys is used here,
         // and the parameters(coin_mint, pc_mint) look a little strange.
-        let amm_keys = if pool_info
-            .get_pool()
-            .ok_or(anyhow!("failed to get pool"))?
-            .mint_a
-            .address
-            == native_mint.to_string()
-        {
-            raydium_library::amm::utils::get_amm_pda_keys(
-                &amm_program,
-                &market_program,
-                &market_id,
-                &token_out,
-                &token_in,
-            )?
-        } else {
-            raydium_library::amm::utils::get_amm_pda_keys(
-                &amm_program,
-                &market_program,
-                &market_id,
-                &token_in,
-                &token_out,
-            )?
-        };
+        let amm_keys = raydium_library::amm::utils::get_amm_pda_keys(
+            &amm_program,
+            &market_program,
+            &market_id,
+            &mint,
+            &native_mint,
+        )?;
         debug!("amm_keys: {amm_keys:#?}");
         // load market keys
         let market_keys = raydium_library::amm::openbook::get_keys_for_market(
@@ -239,14 +222,31 @@ impl Swap {
         )?;
         debug!("calculate_pool result: {:#?}", result);
         // setting direction
-        let direction = if token_in == amm_keys.amm_coin_mint && token_out == amm_keys.amm_pc_mint {
-            amm::utils::SwapDirection::Coin2PC
-        } else {
-            amm::utils::SwapDirection::PC2Coin
+        let (mut direction, mut direction_str) = match swap_direction {
+            SwapDirection::Buy => (amm::utils::SwapDirection::PC2Coin, "PC2Coin"),
+            SwapDirection::Sell => (amm::utils::SwapDirection::Coin2PC, "Coin2PC"),
         };
+        // if mint_a is native mint, reverse direction
+        if pool_info
+            .get_pool()
+            .ok_or(anyhow!("failed to get pool"))?
+            .mint_a
+            .address
+            == native_mint.to_string()
+        {
+            (direction, direction_str) = match direction {
+                amm::utils::SwapDirection::PC2Coin => {
+                    (amm::utils::SwapDirection::Coin2PC, "Coin2PC")
+                }
+                amm::utils::SwapDirection::Coin2PC => {
+                    (amm::utils::SwapDirection::PC2Coin, "PC2Coin")
+                }
+            };
+        }
+        debug!("direction: {}", direction_str);
 
         info!(
-            "swap: {} -> {} -> {}",
+            "swap: {}, value: {:?} -> {}",
             token_in, amount_ui_pretty, token_out
         );
         let other_amount_threshold = raydium_library::amm::swap_with_slippage(
