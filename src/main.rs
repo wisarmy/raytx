@@ -1,12 +1,14 @@
 use anyhow::Result;
 use clap::{ArgGroup, Parser, Subcommand};
+#[cfg(feature = "swap_ts")]
+use raytx::swap_ts;
 use raytx::{
     get_rpc_client, get_wallet,
     jito::{init_tip_accounts, ws::run_tip_stream},
     logger,
     raydium::get_pool_info,
     swap::{self, SwapDirection, SwapInType},
-    swap_ts, token,
+    token,
 };
 use std::str::FromStr;
 use tracing::{debug, info};
@@ -22,6 +24,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    #[cfg(feature = "swap_ts")]
     #[command(about = "swap the mint token by ts")]
     #[command(group(
         ArgGroup::new("amount")
@@ -80,6 +83,7 @@ async fn main() -> Result<()> {
     let wallet = get_wallet()?;
 
     match &cli.command {
+        #[cfg(feature = "swap_ts")]
         Some(Command::SwapTs {
             mint,
             direction,

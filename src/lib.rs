@@ -8,6 +8,7 @@ pub mod jito;
 pub mod logger;
 pub mod raydium;
 pub mod swap;
+#[cfg(feature = "swap_ts")]
 pub mod swap_ts;
 pub mod token;
 
