@@ -127,7 +127,7 @@ where
                 }
             }
         } else {
-            progress_bar.set_message(format!("Finalizing bundle {}: {}", bundle_id, "empty"));
+            progress_bar.set_message(format!("Finalizing bundle {}: {}", bundle_id, "None"));
         }
 
         // check loop exceeded 1 minute,
