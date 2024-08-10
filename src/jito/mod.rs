@@ -123,8 +123,7 @@ where
                 }
             }
         } else {
-            error!("Bundle status is empty.");
-            return Err(anyhow!("Bundle status is empty"));
+            warn!("Bundle status is empty.");
         }
 
         // check loop exceeded 1 minute,
