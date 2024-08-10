@@ -3588,6 +3588,7 @@ dependencies = [
  "ctor",
  "dotenvy",
  "futures-util",
+ "indicatif",
  "jito-block-engine-json-rpc-client",
  "rand 0.8.5",
  "raydium-library",

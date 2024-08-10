@@ -2,6 +2,7 @@ use std::{future::Future, str::FromStr, sync::LazyLock, time::Duration};
 
 use anyhow::{anyhow, Result};
 use api::{get_tip_accounts, TipAccountResult};
+use indicatif::{ProgressBar, ProgressStyle};
 use rand::{seq::IteratorRandom, thread_rng};
 use serde::Deserialize;
 use serde_json::Value;
@@ -88,7 +89,9 @@ where
     F: Fn(String) -> Fut,
     Fut: Future<Output = Result<Vec<Value>>>,
 {
+    let progress_bar = new_progress_bar();
     let start_time = Instant::now();
+
     loop {
         let statuses = fetch_statuses(bundle_id.clone()).await?;
 
@@ -104,9 +107,10 @@ where
             debug!("{:?}", bundle_status);
             match bundle_status.confirmation_status.as_str() {
                 "finalized" | "confirmed" => {
+                    progress_bar.finish_and_clear();
                     info!(
-                        "Bundle confirmed with status: {}",
-                        bundle_status.confirmation_status
+                        "Finalized bundle {}: {}",
+                        bundle_id, bundle_status.confirmation_status
                     );
                     // print tx
                     bundle_status
@@ -116,14 +120,14 @@ where
                     return Ok(());
                 }
                 _ => {
-                    info!(
-                        "Waiting for confirmation..., status: {}",
-                        bundle_status.confirmation_status
-                    );
+                    progress_bar.set_message(format!(
+                        "Finalizing bundle {}: {}",
+                        bundle_id, bundle_status.confirmation_status
+                    ));
                 }
             }
         } else {
-            warn!("Bundle status is empty.");
+            progress_bar.set_message(format!("Finalizing bundle {}: {}", bundle_id, "empty"));
         }
 
         // check loop exceeded 1 minute,
@@ -135,6 +139,16 @@ where
         // Wait for a certain duration before retrying
         sleep(interval).await;
     }
+}
+pub fn new_progress_bar() -> ProgressBar {
+    let progress_bar = ProgressBar::new(42);
+    progress_bar.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {wide_msg}")
+            .expect("ProgressStyle::template direct input to be correct"),
+    );
+    progress_bar.enable_steady_tick(Duration::from_millis(100));
+    progress_bar
 }
 
 #[cfg(test)]
@@ -160,7 +174,7 @@ mod tests {
         for &status in &["finalized", "confirmed"] {
             let wait_result = wait_for_bundle_confirmation(
                 |id| async { Ok(generate_statuses(id, status)) },
-                "test_bundle".to_string(),
+                "6e4b90284778a40633b56e4289202ea79e62d2296bb3d45398bb93f6c9ec083d".to_string(),
                 Duration::from_secs(1),
                 Duration::from_secs(1),
             )
@@ -172,7 +186,7 @@ mod tests {
     async fn test_error_confirmation() {
         let wait_result = wait_for_bundle_confirmation(
             |id| async { Ok(generate_statuses(id, "processed")) },
-            "test_bundle".to_string(),
+            "6e4b90284778a40633b56e4289202ea79e62d2296bb3d45398bb93f6c9ec083d".to_string(),
             Duration::from_secs(1),
             Duration::from_secs(2),
         )
