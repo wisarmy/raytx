@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
 use clap::ValueEnum;
@@ -19,11 +19,12 @@ use spl_token_client::{
     token::{Token, TokenError},
 };
 
+use tokio::time::Instant;
 use tracing::{debug, error, info};
 
 use crate::{
     get_rpc_client_blocking,
-    jito::{self, get_tip_account, get_tip_value},
+    jito::{self, get_tip_account, get_tip_value, wait_for_bundle_confirmation},
     raydium::get_pool_info,
 };
 
@@ -299,14 +300,15 @@ impl Swap {
             recent_blockhash,
         );
 
+        let start_time = Instant::now();
         if use_jito {
             // jito
             let tip_account = get_tip_account().await?;
-            let jito_client = JitoRpcClient::new(format!(
+            let jito_client = Arc::new(JitoRpcClient::new(format!(
                 "{}/api/v1/bundles",
                 jito::BLOCK_ENGINE_URL.to_string()
-            ));
-            // jito tip
+            )));
+            // ito tip
             let tip = get_tip_value().await?;
             let tip_lamports = ui_amount_to_amount(tip, spl_token::native_mint::DECIMALS);
             info!(
@@ -324,11 +326,29 @@ impl Swap {
             )));
             let bundle_id = jito_client.send_bundle(&bundle).await?;
             info!("bundle_id: {}", bundle_id);
+
+            wait_for_bundle_confirmation(
+                move |id: String| {
+                    let client = Arc::clone(&jito_client);
+                    async move {
+                        let response = client.get_bundle_statuses(&[id]).await;
+                        let statuses = response.inspect_err(|err| {
+                            error!("Error fetching bundle status: {:?}", err);
+                        })?;
+                        Ok(statuses.value)
+                    }
+                },
+                bundle_id,
+                Duration::from_millis(1000),
+                Duration::from_secs(60),
+            )
+            .await?;
         } else {
             let sig = raydium_library::common::rpc::send_txn(&client, &txn, true)?;
             info!("signature: {:?}", sig);
         }
 
+        info!("tx elapsed: {:?}", start_time.elapsed());
         Ok(true)
     }
 }

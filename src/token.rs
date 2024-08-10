@@ -103,20 +103,23 @@ async fn token_accounts_filter(
 
 #[cfg(test)]
 mod tests {
-    use crate::{get_rpc_client, token::token_account};
-    use solana_sdk::pubkey::Pubkey;
-    use std::str::FromStr;
+    #[cfg(feature = "slow_tests")]
+    mod slow_tests {
+        use crate::{get_rpc_client, token::token_account};
+        use solana_sdk::pubkey::Pubkey;
+        use std::str::FromStr;
 
-    #[tokio::test]
-    pub async fn test_token_account() {
-        let client = get_rpc_client().unwrap();
-        let owner = Pubkey::from_str("AAf6DN1Wkh4TKvqxVX1xLfEKRtZNSZKwrHsr3NL2Wphm")
-            .expect("failed to parse owner pubkey");
-        let mint = spl_token::native_mint::id();
-        let token_account = token_account(&client, &owner, mint).await.unwrap();
-        assert_eq!(
-            token_account.pubkey,
-            "C4rpfuopbU2q8kmn9panVsi2NkXW2uQaubmFSx9XCi1H"
-        )
+        #[tokio::test]
+        pub async fn test_token_account() {
+            let client = get_rpc_client().unwrap();
+            let owner = Pubkey::from_str("AAf6DN1Wkh4TKvqxVX1xLfEKRtZNSZKwrHsr3NL2Wphm")
+                .expect("failed to parse owner pubkey");
+            let mint = spl_token::native_mint::id();
+            let token_account = token_account(&client, &owner, mint).await.unwrap();
+            assert_eq!(
+                token_account.pubkey,
+                "C4rpfuopbU2q8kmn9panVsi2NkXW2uQaubmFSx9XCi1H"
+            )
+        }
     }
 }

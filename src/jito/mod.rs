@@ -1,11 +1,16 @@
-use std::{str::FromStr, sync::LazyLock};
+use std::{future::Future, str::FromStr, sync::LazyLock, time::Duration};
 
 use anyhow::{anyhow, Result};
 use api::{get_tip_accounts, TipAccountResult};
 use rand::{seq::IteratorRandom, thread_rng};
+use serde::Deserialize;
+use serde_json::Value;
 use solana_sdk::pubkey::Pubkey;
-use tokio::sync::RwLock;
-use tracing::error;
+use tokio::{
+    sync::RwLock,
+    time::{sleep, Instant},
+};
+use tracing::{debug, error, info, warn};
 use ws::TIPS_PERCENTILE;
 
 use crate::get_env_var;
@@ -56,5 +61,123 @@ pub async fn get_tip_value() -> Result<f64> {
         }
     } else {
         Err(anyhow!("jito: failed get tip"))
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct BundleStatus {
+    pub bundle_id: String,
+    pub transactions: Vec<String>,
+    pub slot: u64,
+    pub confirmation_status: String,
+    pub err: ErrorStatus,
+}
+#[derive(Deserialize, Debug)]
+pub struct ErrorStatus {
+    #[serde(rename = "Ok")]
+    pub ok: Option<()>,
+}
+
+pub async fn wait_for_bundle_confirmation<F, Fut>(
+    fetch_statuses: F,
+    bundle_id: String,
+    interval: Duration,
+    timeout: Duration,
+) -> Result<()>
+where
+    F: Fn(String) -> Fut,
+    Fut: Future<Output = Result<Vec<Value>>>,
+{
+    let start_time = Instant::now();
+    loop {
+        let statuses = fetch_statuses(bundle_id.clone()).await?;
+
+        if let Some(status) = statuses.first() {
+            let bundle_status: BundleStatus =
+                serde_json::from_value(status.clone()).inspect_err(|err| {
+                    error!(
+                        "Failed to parse JSON when get_bundle_statuses, err: {}",
+                        err,
+                    );
+                })?;
+
+            debug!("{:?}", bundle_status);
+            match bundle_status.confirmation_status.as_str() {
+                "finalized" | "confirmed" => {
+                    info!(
+                        "Bundle confirmed with status: {}",
+                        bundle_status.confirmation_status
+                    );
+                    // print tx
+                    bundle_status
+                        .transactions
+                        .iter()
+                        .for_each(|tx| info!("https://solscan.io/tx/{}", tx));
+                    return Ok(());
+                }
+                _ => {
+                    info!(
+                        "Waiting for confirmation..., status: {}",
+                        bundle_status.confirmation_status
+                    );
+                }
+            }
+        } else {
+            error!("Bundle status is empty.");
+            return Err(anyhow!("Bundle status is empty"));
+        }
+
+        // check loop exceeded 1 minute,
+        if start_time.elapsed() > timeout {
+            warn!("Loop exceeded {:?}, breaking out.", timeout);
+            return Err(anyhow!("Bundle status get timeout"));
+        }
+
+        // Wait for a certain duration before retrying
+        sleep(interval).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use serde_json::{json, Value};
+
+    use super::wait_for_bundle_confirmation;
+
+    fn generate_statuses(bundle_id: String, confirmation_status: &str) -> Vec<Value> {
+        vec![json!({
+            "bundle_id": bundle_id,
+            "transactions": ["tx1", "tx2"],
+            "slot": 12345,
+            "confirmation_status": confirmation_status,
+            "err": {"Ok": null}
+        })]
+    }
+
+    #[tokio::test]
+    async fn test_success_confirmation() {
+        for &status in &["finalized", "confirmed"] {
+            let wait_result = wait_for_bundle_confirmation(
+                |id| async { Ok(generate_statuses(id, status)) },
+                "test_bundle".to_string(),
+                Duration::from_secs(1),
+                Duration::from_secs(1),
+            )
+            .await;
+            assert!(wait_result.is_ok());
+        }
+    }
+    #[tokio::test]
+    async fn test_error_confirmation() {
+        let wait_result = wait_for_bundle_confirmation(
+            |id| async { Ok(generate_statuses(id, "processed")) },
+            "test_bundle".to_string(),
+            Duration::from_secs(1),
+            Duration::from_secs(2),
+        )
+        .await;
+        assert!(wait_result.is_err());
     }
 }
