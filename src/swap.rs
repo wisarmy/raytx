@@ -308,8 +308,9 @@ impl Swap {
                 "{}/api/v1/bundles",
                 jito::BLOCK_ENGINE_URL.to_string()
             )));
-            // ito tip
-            let tip = get_tip_value().await?;
+            // jito tip, the upper limit is 0.1
+            let mut tip = get_tip_value().await?;
+            tip = tip.min(0.1);
             let tip_lamports = ui_amount_to_amount(tip, spl_token::native_mint::DECIMALS);
             info!(
                 "tip account: {}, tip(sol): {}, lamports: {}",
@@ -340,7 +341,7 @@ impl Swap {
                 },
                 bundle_id,
                 Duration::from_millis(1000),
-                Duration::from_secs(60),
+                Duration::from_secs(30),
             )
             .await?;
         } else {
