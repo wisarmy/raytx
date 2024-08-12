@@ -6,7 +6,7 @@ Raytx is a command-line tool written in Rust for performing token swap operation
 
 Before getting started, ensure that the following software is installed on your system:
 
-- [Node.js](https://nodejs.org/)
+- [Node.js](https://nodejs.org/) If using TS for swap
 - [Rust](https://www.rust-lang.org/)
 
 
@@ -34,6 +34,9 @@ This will generate an executable file raytx, located in the target/release/ dire
 ./target/release/raytx swap <mint> sell --amount-in=1000
 ```
 Replace <mint> with the address of the token you want to swap, and <amount-in> with the quantity|<amount-in-pct> with the percentage you want to swap.
+
+### Jito
+Use `--jito` to speed up swap.
 
 # Contributing
 Contributions to this project are welcome. If you have any questions or suggestions, feel free to raise an issue.

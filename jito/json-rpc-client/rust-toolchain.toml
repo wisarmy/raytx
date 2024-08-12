@@ -1,0 +1,5 @@
+[toolchain]
+# Needs to be compiled with the same rust version that the RPC loading this plugin was compiled with.
+# https://github.com/solana-labs/solana/blob/v1.17.14/rust-toolchain.toml
+channel = "1.76.0"
+components = [ "rustfmt", "rustc-dev", "clippy", "cargo" ]

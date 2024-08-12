@@ -4,11 +4,17 @@ use anyhow::Result;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::Keypair;
 
+pub mod jito;
 pub mod logger;
 pub mod raydium;
 pub mod swap;
+#[cfg(feature = "swap_ts")]
 pub mod swap_ts;
 pub mod token;
+
+fn get_env_var(key: &str) -> String {
+    dotenvy::var(key).unwrap_or_else(|_| panic!("Environment variable {} is not set", key))
+}
 
 pub fn get_rpc_client() -> Result<Arc<RpcClient>> {
     let cluster_url = dotenvy::var("RPC_ENDPOINT")?;

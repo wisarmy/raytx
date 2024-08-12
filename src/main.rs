@@ -1,10 +1,14 @@
 use anyhow::Result;
 use clap::{ArgGroup, Parser, Subcommand};
+#[cfg(feature = "swap_ts")]
+use raytx::swap_ts;
 use raytx::{
-    get_rpc_client, get_wallet, logger,
+    get_rpc_client, get_wallet,
+    jito::{init_tip_accounts, ws::run_tip_stream},
+    logger,
     raydium::get_pool_info,
     swap::{self, SwapDirection, SwapInType},
-    swap_ts, token,
+    token,
 };
 use std::str::FromStr;
 use tracing::{debug, info};
@@ -20,6 +24,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    #[cfg(feature = "swap_ts")]
     #[command(about = "swap the mint token by ts")]
     #[command(group(
         ArgGroup::new("amount")
@@ -49,6 +54,8 @@ enum Command {
         amount_in: Option<f64>,
         #[arg(long, help = "amount in percentage, only support sell")]
         amount_in_pct: Option<f64>,
+        #[arg(long, help = "use jito to swap", default_value_t = false)]
+        jito: bool,
     },
     #[command(about = "Wrap sol -> wsol")]
     Wrap {},
@@ -76,6 +83,7 @@ async fn main() -> Result<()> {
     let wallet = get_wallet()?;
 
     match &cli.command {
+        #[cfg(feature = "swap_ts")]
         Some(Command::SwapTs {
             mint,
             direction,
@@ -91,7 +99,8 @@ async fn main() -> Result<()> {
             };
 
             debug!("{} {:?} {:?} {:?}", mint, direction, amount_in, in_type);
-            let swapx = swap_ts::Swap::new(client, wallet.pubkey(), dotenvy::var("SWAP_ADDR").ok());
+            let swapx =
+                swap_ts::Swap::new(client, wallet.pubkey(), dotenvy::var("SWAP_TS_ADDR").ok());
             swapx
                 .swap(mint, *amount_in, direction.clone(), in_type)
                 .await?;
@@ -101,6 +110,7 @@ async fn main() -> Result<()> {
             direction,
             amount_in,
             amount_in_pct,
+            jito,
         }) => {
             let (amount_in, in_type) = if let Some(amount_in) = amount_in {
                 (amount_in, SwapInType::Qty)
@@ -115,9 +125,27 @@ async fn main() -> Result<()> {
                 "{} {:?} {:?} {:?} slippage: {}",
                 mint, direction, amount_in, in_type, slippage
             );
+            // jito
+            if *jito {
+                init_tip_accounts().await.unwrap();
+                tokio::spawn(async {
+                    if let Err(e) = run_tip_stream().await {
+                        println!("Error: {:?}", e);
+                    }
+                });
+                info!("waiting 5s for get tip percentiles data");
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            }
             let swapx = swap::Swap::new(client, wallet);
             swapx
-                .swap(mint, *amount_in, direction.clone(), in_type, slippage)
+                .swap(
+                    mint,
+                    *amount_in,
+                    direction.clone(),
+                    in_type,
+                    slippage,
+                    *jito,
+                )
                 .await?;
         }
 
