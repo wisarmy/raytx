@@ -43,6 +43,11 @@ enum Command {
         amount_in: Option<f64>,
         #[arg(long, help = "amount in percentage, only support sell")]
         amount_in_pct: Option<f64>,
+        #[arg(
+            long,
+            help = "If set, this API will be used for swap. otherwise, the swap CLI will be used."
+        )]
+        addr: Option<String>,
     },
     #[command(about = "swap the mint token by rs")]
     #[command(group(
@@ -98,6 +103,7 @@ async fn main() -> Result<()> {
             direction,
             amount_in,
             amount_in_pct,
+            addr,
         }) => {
             let (amount_in, in_type) = if let Some(amount_in) = amount_in {
                 (amount_in, SwapInType::Qty)
@@ -108,7 +114,7 @@ async fn main() -> Result<()> {
             };
 
             debug!("{} {:?} {:?} {:?}", mint, direction, amount_in, in_type);
-            let swapx = swap_ts::Swap::new(client, wallet.pubkey(), env::var("SWAP_TS_ADDR").ok());
+            let swapx = swap_ts::Swap::new(client, wallet.pubkey(), addr.clone());
             swapx
                 .swap(mint, *amount_in, direction.clone(), in_type)
                 .await?;

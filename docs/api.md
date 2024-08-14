@@ -1,4 +1,4 @@
-# 买卖
+# Buy/Sell
 ```
 curl -X POST http://127.0.0.1:7235/api/swap \
 -H "Content-Type: application/json" \
@@ -11,9 +11,9 @@ curl -X POST http://127.0.0.1:7235/api/swap \
 }'
 ```
 
-# 按比例卖出
-`in_type` 设置为pct
-`amount_in` 为百分比，当`amount_in=1`时将全部卖出，并关闭ATA
+# Sell Proportionally
+Set `in_type` to `pct`
+`amount_in` is the percentage; when `amount_in=1`, it will sell all and close ATA
 ```
 curl -X POST http://127.0.0.1:7235/api/swap \
 -H "Content-Type: application/json" \

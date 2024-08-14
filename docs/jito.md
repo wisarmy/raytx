@@ -8,7 +8,7 @@ curl https://mainnet.block-engine.jito.wtf/api/v1/bundles -X POST -H "Content-Ty
     "params": []
 }
 '
-# 结果
+# response
 {
   "jsonrpc": "2.0",
   "result": [
