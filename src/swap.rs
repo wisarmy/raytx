@@ -80,6 +80,7 @@ impl Swap {
             Pubkey::from_str(mint).map_err(|e| anyhow!("failed to parse mint pubkey: {}", e))?;
         let program_id = spl_token::ID;
         let native_mint = spl_token::native_mint::ID;
+        let ata_program = Pubkey::from_str("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")?;
 
         let (token_in, token_out) = match swap_direction {
             SwapDirection::Buy => (native_mint, mint),
@@ -141,7 +142,7 @@ impl Swap {
                             &owner,
                             &owner,
                             &token_out,
-                            &program_id,
+                            &ata_program,
                         ));
                     }
                     Err(error) => error!("error retrieving out ATA: {}", error),
@@ -393,7 +394,7 @@ pub async fn swap_handler(
         }
     };
 
-    debug!("{:?}, slippage: {}", input, slippage);
+    info!("{:?}, slippage: {}", input, slippage);
 
     swapx
         .swap(
