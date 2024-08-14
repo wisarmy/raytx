@@ -6,7 +6,6 @@ curl -X POST http://127.0.0.1:7235/api/swap \
   "mint": "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
   "direction": "buy|sell",
   "amount_in": 0.001,
-  "in_type": null,
   "slippage": 20,
   "jito": false|true
 }'
@@ -22,7 +21,7 @@ curl -X POST http://127.0.0.1:7235/api/swap \
   "mint": "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
   "direction": "sell",
   "amount_in": 1,
-  "in_type": pct,
+  "in_type": "pct",
   "slippage": 20,
   "jito": false|true
 }'
