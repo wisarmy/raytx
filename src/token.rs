@@ -1,8 +1,18 @@
+use std::sync::Arc;
+
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use solana_account_decoder::UiAccountData;
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_request::TokenAccountsFilter};
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{pubkey::Pubkey, signature::Keypair};
+use spl_token_2022::{
+    extension::StateWithExtensionsOwned,
+    state::{Account, Mint},
+};
+use spl_token_client::{
+    client::{ProgramClient, ProgramRpcClient, ProgramRpcClientSendTransaction, RpcClientResponse},
+    token::{Token, TokenError, TokenResult},
+};
 use tracing::trace;
 
 pub type TokenAccounts = Vec<TokenAccount>;
@@ -100,6 +110,138 @@ async fn token_accounts_filter(
 
     Ok(tas)
 }
+
+pub async fn get_account_info(
+    client: Arc<RpcClient>,
+    _keypair: Arc<Keypair>,
+    address: &Pubkey,
+    account: &Pubkey,
+) -> TokenResult<StateWithExtensionsOwned<Account>> {
+    let program_client = Arc::new(ProgramRpcClient::new(
+        client.clone(),
+        ProgramRpcClientSendTransaction,
+    ));
+    let account = program_client
+        .get_account(*account)
+        .await
+        .map_err(TokenError::Client)?
+        .ok_or(TokenError::AccountNotFound)?;
+
+    if account.owner != spl_token::ID {
+        return Err(TokenError::AccountInvalidOwner);
+    }
+    let account = StateWithExtensionsOwned::<Account>::unpack(account.data)?;
+    if account.base.mint != *address {
+        return Err(TokenError::AccountInvalidMint);
+    }
+
+    Ok(account)
+}
+
+// pub async fn get_account_info(
+//     client: Arc<RpcClient>,
+//     keypair: Arc<Keypair>,
+//     address: &Pubkey,
+//     account: &Pubkey,
+// ) -> TokenResult<StateWithExtensionsOwned<Account>> {
+//     let token_client = Token::new(
+//         Arc::new(ProgramRpcClient::new(
+//             client.clone(),
+//             ProgramRpcClientSendTransaction,
+//         )),
+//         &spl_token::ID,
+//         address,
+//         None,
+//         Arc::new(Keypair::from_bytes(&keypair.to_bytes()).expect("failed to copy keypair")),
+//     );
+//     token_client.get_account_info(account).await
+// }
+
+pub fn get_associated_token_address(
+    client: Arc<RpcClient>,
+    keypair: Arc<Keypair>,
+    address: &Pubkey,
+    owner: &Pubkey,
+) -> Pubkey {
+    let token_client = Token::new(
+        Arc::new(ProgramRpcClient::new(
+            client.clone(),
+            ProgramRpcClientSendTransaction,
+        )),
+        &spl_token::ID,
+        address,
+        None,
+        Arc::new(Keypair::from_bytes(&keypair.to_bytes()).expect("failed to copy keypair")),
+    );
+    token_client.get_associated_token_address(owner)
+}
+
+pub async fn create_associated_token_account(
+    client: Arc<RpcClient>,
+    keypair: Arc<Keypair>,
+    address: &Pubkey,
+    owner: &Pubkey,
+) -> Result<RpcClientResponse, TokenError> {
+    let token_client = Token::new(
+        Arc::new(ProgramRpcClient::new(
+            client.clone(),
+            ProgramRpcClientSendTransaction,
+        )),
+        &spl_token::ID,
+        address,
+        None,
+        Arc::new(Keypair::from_bytes(&keypair.to_bytes()).expect("failed to copy keypair")),
+    );
+    token_client.create_associated_token_account(owner).await
+}
+
+pub async fn get_mint_info(
+    client: Arc<RpcClient>,
+    _keypair: Arc<Keypair>,
+    address: &Pubkey,
+) -> TokenResult<StateWithExtensionsOwned<Mint>> {
+    let program_client = Arc::new(ProgramRpcClient::new(
+        client.clone(),
+        ProgramRpcClientSendTransaction,
+    ));
+    let account = program_client
+        .get_account(*address)
+        .await
+        .map_err(TokenError::Client)?
+        .ok_or(TokenError::AccountNotFound)?;
+
+    if account.owner != spl_token::ID {
+        return Err(TokenError::AccountInvalidOwner);
+    }
+
+    let mint_result = StateWithExtensionsOwned::<Mint>::unpack(account.data).map_err(Into::into);
+    let decimals: Option<u8> = None;
+    if let (Ok(mint), Some(decimals)) = (&mint_result, decimals) {
+        if decimals != mint.base.decimals {
+            return Err(TokenError::InvalidDecimals);
+        }
+    }
+
+    mint_result
+}
+
+// pub async fn get_mint_info(
+//     client: Arc<RpcClient>,
+//     keypair: Arc<Keypair>,
+//     address: &Pubkey,
+// ) -> TokenResult<StateWithExtensionsOwned<Mint>> {
+//     let token_client = Token::new(
+//         Arc::new(ProgramRpcClient::new(
+//             client.clone(),
+//             ProgramRpcClientSendTransaction,
+//         )),
+//         &spl_token::ID,
+//         address,
+//         None,
+//         Arc::new(Keypair::from_bytes(&keypair.to_bytes()).expect("failed to copy keypair")),
+//     );
+//     token_client.get_mint_info().await
+// }
 
 #[cfg(test)]
 mod tests {

@@ -1,3 +1,5 @@
+use std::env;
+
 use anyhow::Result;
 use reqwest::Proxy;
 use serde::Deserialize;
@@ -6,7 +8,7 @@ use serde::Deserialize;
 // https://api-v3.raydium.io/pools/info/mint?mint1=So11111111111111111111111111111111111111112&mint2=EzM2d8JVpzfhV7km3tUsR1U1S4xwkrPnWkM4QFeTpump&poolType=standard&poolSortField=default&sortType=desc&pageSize=10&page=1
 pub async fn get_pool_info(mint1: &str, mint2: &str) -> Result<PoolInfo> {
     let mut client_builder = reqwest::Client::builder();
-    if let Ok(http_proxy) = dotenvy::var("HTTP_PROXY") {
+    if let Ok(http_proxy) = env::var("HTTP_PROXY") {
         let proxy = Proxy::all(http_proxy)?;
         client_builder = client_builder.proxy(proxy);
     }

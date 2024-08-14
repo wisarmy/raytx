@@ -1,8 +1,11 @@
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{env, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
+use axum::{debug_handler, extract::State, response::IntoResponse, Json};
 use clap::ValueEnum;
+use jito_json_rpc_client::jsonrpc_client::rpc_client::RpcClient as JitoRpcClient;
 use raydium_library::amm;
+use serde::Deserialize;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
     pubkey::Pubkey,
@@ -11,31 +14,31 @@ use solana_sdk::{
     system_transaction,
     transaction::{Transaction, VersionedTransaction},
 };
-// use spl_associated_token_account::instruction::create_associated_token_account;
-use jito_json_rpc_client::jsonrpc_client::rpc_client::RpcClient as JitoRpcClient;
+use spl_associated_token_account::instruction::create_associated_token_account;
 use spl_token::{amount_to_ui_amount, ui_amount_to_amount};
-use spl_token_client::{
-    client::{ProgramClient, ProgramRpcClient, ProgramRpcClientSendTransaction},
-    token::{Token, TokenError},
-};
+use spl_token_client::token::TokenError;
 
 use tokio::time::Instant;
 use tracing::{debug, error, info};
 
 use crate::{
     get_rpc_client_blocking,
+    helper::{api_error, api_ok},
     jito::{self, get_tip_account, get_tip_value, wait_for_bundle_confirmation},
     raydium::get_pool_info,
+    token,
 };
 
 pub struct Swap {
     client: Arc<RpcClient>,
-    keypair: Keypair,
+    keypair: Arc<Keypair>,
 }
 
-#[derive(ValueEnum, Debug, Clone)]
+#[derive(ValueEnum, Debug, Clone, Deserialize)]
 pub enum SwapDirection {
+    #[serde(rename = "buy")]
     Buy,
+    #[serde(rename = "sell")]
     Sell,
 }
 impl From<SwapDirection> for u8 {
@@ -46,27 +49,19 @@ impl From<SwapDirection> for u8 {
         }
     }
 }
-#[derive(ValueEnum, Debug, Clone)]
+#[derive(ValueEnum, Debug, Clone, Deserialize)]
 pub enum SwapInType {
     /// Quantity
+    #[serde(rename = "qty")]
     Qty,
     /// Percentage
+    #[serde(rename = "pct")]
     Pct,
 }
 
 impl Swap {
-    pub fn new(client: Arc<RpcClient>, keypair: Keypair) -> Self {
+    pub fn new(client: Arc<RpcClient>, keypair: Arc<Keypair>) -> Self {
         Self { client, keypair }
-    }
-
-    fn program_client(&self) -> Arc<dyn ProgramClient<ProgramRpcClientSendTransaction>> {
-        Arc::new(ProgramRpcClient::new(
-            self.client.clone(),
-            ProgramRpcClientSendTransaction,
-        ))
-    }
-    fn keypair(&self) -> Keypair {
-        Keypair::from_bytes(&self.keypair.to_bytes()).expect("failed to copy keypair")
     }
 
     pub async fn swap(
@@ -77,13 +72,12 @@ impl Swap {
         in_type: SwapInType,
         slippage: u64,
         use_jito: bool,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         // slippage_bps = 50u64; // 0.5%
         let slippage_bps = slippage * 100;
         let owner = self.keypair.pubkey();
         let mint =
             Pubkey::from_str(mint).map_err(|e| anyhow!("failed to parse mint pubkey: {}", e))?;
-        let program_client = self.program_client();
         let program_id = spl_token::ID;
         let native_mint = spl_token::native_mint::ID;
 
@@ -91,52 +85,64 @@ impl Swap {
             SwapDirection::Buy => (native_mint, mint),
             SwapDirection::Sell => (mint, native_mint),
         };
-
-        let token_in_client = Token::new(
-            program_client.clone(),
-            &program_id,
-            &token_in,
-            None,
-            Arc::new(self.keypair()),
-        );
-        let token_out_client = Token::new(
-            program_client.clone(),
-            &program_id,
-            &token_out,
-            None,
-            Arc::new(self.keypair()),
-        );
-
         let pool_info = get_pool_info(&token_in.to_string(), &token_out.to_string()).await?;
 
-        let in_ata = token_in_client.get_associated_token_address(&owner);
-        let in_account = token_in_client.get_account_info(&in_ata).await?;
-        let in_mint = token_in_client.get_mint_info().await?;
-        let out_ata = token_out_client.get_associated_token_address(&owner);
+        let in_ata = token::get_associated_token_address(
+            self.client.clone(),
+            self.keypair.clone(),
+            &token_in,
+            &owner,
+        );
+        let in_account = token::get_account_info(
+            self.client.clone(),
+            self.keypair.clone(),
+            &token_in,
+            &in_ata,
+        )
+        .await?;
+        let in_mint =
+            token::get_mint_info(self.client.clone(), self.keypair.clone(), &token_in).await?;
+        let out_ata = token::get_associated_token_address(
+            self.client.clone(),
+            self.keypair.clone(),
+            &token_out,
+            &owner,
+        );
 
-        let create_instruction = None;
+        let mut create_instruction = None;
         let mut close_instruction = None;
         let swap_base_in = true;
 
         let (amount_specified, amount_ui_pretty) = match swap_direction {
             SwapDirection::Buy => {
                 // Create base ATA if it doesn't exist.
-                match token_out_client.get_account_info(&out_ata).await {
+                match token::get_account_info(
+                    self.client.clone(),
+                    self.keypair.clone(),
+                    &token_out,
+                    &out_ata,
+                )
+                .await
+                {
                     Ok(_) => debug!("base ata exists. skipping creation.."),
                     Err(TokenError::AccountNotFound) | Err(TokenError::AccountInvalidOwner) => {
                         info!(
                             "base ATA for mint {} does not exist. will be create",
                             token_out
                         );
-                        token_out_client
-                            .create_associated_token_account(&owner)
-                            .await?;
-                        // create_instruction = Some(create_associated_token_account(
-                        //     &owner,
-                        //     &owner,
+                        // token::create_associated_token_account(
+                        //     self.client.clone(),
+                        //     self.keypair.clone(),
                         //     &token_out,
-                        //     &program_id,
-                        // ));
+                        //     &owner,
+                        // )
+                        // .await?;
+                        create_instruction = Some(create_associated_token_account(
+                            &owner,
+                            &owner,
+                            &token_out,
+                            &program_id,
+                        ));
                     }
                     Err(error) => error!("error retrieving out ATA: {}", error),
                 }
@@ -282,7 +288,14 @@ impl Swap {
             instructions.push(build_swap_instruction)
         }
         if let Some(create_instruction) = create_instruction {
-            instructions.push(create_instruction);
+            let create_tx = Transaction::new_signed_with_payer(
+                &[create_instruction],
+                Some(&owner),
+                &vec![&*self.keypair.clone()],
+                client.get_latest_blockhash()?,
+            );
+            let create_signature = client.send_and_confirm_transaction(&create_tx)?;
+            info!("Create ATA transaction signature: {}", create_signature);
         }
         if let Some(close_instruction) = close_instruction {
             instructions.push(close_instruction);
@@ -296,7 +309,7 @@ impl Swap {
         let txn = Transaction::new_signed_with_payer(
             &instructions,
             Some(&owner),
-            &vec![&self.keypair],
+            &vec![&*self.keypair.clone()],
             recent_blockhash,
         );
 
@@ -350,6 +363,57 @@ impl Swap {
         }
 
         info!("tx elapsed: {:?}", start_time.elapsed());
-        Ok(true)
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct AppState {
+    pub client: Arc<RpcClient>,
+    pub wallet: Arc<Keypair>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateSwap {
+    mint: String,
+    direction: SwapDirection,
+    amount_in: f64,
+    in_type: Option<SwapInType>,
+    slippage: Option<u64>,
+    jito: Option<bool>,
+}
+
+#[debug_handler]
+pub async fn swap_handler(
+    State(state): State<AppState>,
+    Json(input): Json<CreateSwap>,
+) -> impl IntoResponse {
+    let client = state.client;
+    let wallet = state.wallet;
+    let swapx = Swap::new(client, wallet);
+    let slippage = match input.slippage {
+        Some(v) => v,
+        None => {
+            let slippage = env::var("SLIPPAGE").unwrap_or("5".to_string());
+            let slippage = slippage.parse::<u64>().unwrap_or(5);
+            slippage
+        }
+    };
+
+    info!("{:?}, slippage: {}", input, slippage);
+
+    let result = swapx
+        .swap(
+            input.mint.as_str(),
+            input.amount_in,
+            input.direction.clone(),
+            input.in_type.unwrap_or(SwapInType::Qty),
+            slippage,
+            input.jito.unwrap_or(false),
+        )
+        .await;
+    match result {
+        Ok(_) => api_ok(()),
+        Err(err) => api_error(&err.to_string()),
     }
 }

@@ -7,7 +7,7 @@ Raytx is a command-line tool written in Rust for performing token swap operation
 Before getting started, ensure that the following software is installed on your system:
 
 - [Node.js](https://nodejs.org/) If using TS for swap
-- [Rust](https://www.rust-lang.org/)
+- [Rust](https://www.rust-lang.org/) version 1.8 or higher.
 
 
 ## Build
