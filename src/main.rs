@@ -1,16 +1,20 @@
 use anyhow::Result;
+use axum::{
+    http::{HeaderValue, Method},
+    routing::post,
+    Router,
+};
 use clap::{ArgGroup, Parser, Subcommand};
 #[cfg(feature = "swap_ts")]
 use raytx::swap_ts;
 use raytx::{
-    get_rpc_client, get_wallet,
-    jito::{init_tip_accounts, ws::run_tip_stream},
-    logger,
+    get_rpc_client, get_wallet, jito, logger,
     raydium::get_pool_info,
-    swap::{self, SwapDirection, SwapInType},
+    swap::{self, swap_handler, AppState, SwapDirection, SwapInType},
     token,
 };
-use std::str::FromStr;
+use std::{env, net::SocketAddr, str::FromStr};
+use tower_http::cors::CorsLayer;
 use tracing::{debug, info};
 
 use solana_sdk::{pubkey::Pubkey, signature::Signer};
@@ -57,6 +61,10 @@ enum Command {
         #[arg(long, help = "use jito to swap", default_value_t = false)]
         jito: bool,
     },
+    Daemon {
+        #[arg(long, help = "use jito to swap", default_value = "127.0.0.1:7235")]
+        addr: String,
+    },
     #[command(about = "Wrap sol -> wsol")]
     Wrap {},
     #[command(about = "Unwrap wsol -> sol")]
@@ -77,6 +85,7 @@ enum TokenCommand {
 }
 #[tokio::main]
 async fn main() -> Result<()> {
+    dotenvy::dotenv().ok();
     let cli = Cli::parse();
     logger::init();
     let client = get_rpc_client()?;
@@ -99,8 +108,7 @@ async fn main() -> Result<()> {
             };
 
             debug!("{} {:?} {:?} {:?}", mint, direction, amount_in, in_type);
-            let swapx =
-                swap_ts::Swap::new(client, wallet.pubkey(), dotenvy::var("SWAP_TS_ADDR").ok());
+            let swapx = swap_ts::Swap::new(client, wallet.pubkey(), env::var("SWAP_TS_ADDR").ok());
             swapx
                 .swap(mint, *amount_in, direction.clone(), in_type)
                 .await?;
@@ -119,7 +127,7 @@ async fn main() -> Result<()> {
             } else {
                 panic!("either in_amount or in_amount_pct must be provided");
             };
-            let slippage = dotenvy::var("SLIPPAGE").unwrap_or("5".to_string());
+            let slippage = env::var("SLIPPAGE").unwrap_or("5".to_string());
             let slippage = slippage.parse::<u64>().unwrap_or(5);
             debug!(
                 "{} {:?} {:?} {:?} slippage: {}",
@@ -127,9 +135,9 @@ async fn main() -> Result<()> {
             );
             // jito
             if *jito {
-                init_tip_accounts().await.unwrap();
+                jito::init_tip_accounts().await.unwrap();
                 tokio::spawn(async {
-                    if let Err(e) = run_tip_stream().await {
+                    if let Err(e) = jito::ws::tip_stream().await {
                         println!("Error: {:?}", e);
                     }
                 });
@@ -148,7 +156,42 @@ async fn main() -> Result<()> {
                 )
                 .await?;
         }
+        Some(Command::Daemon { addr }) => {
+            jito::init_tip_accounts().await.unwrap();
+            tokio::spawn(async {
+                jito::ws::tip_stream()
+                    .await
+                    .expect("Failed to get tip percentiles data");
+            });
+            let app_state = AppState { client, wallet };
+            let app = Router::new()
+                .nest(
+                    "/api",
+                    Router::new()
+                        .route("/swap", post(swap_handler))
+                        .with_state(app_state),
+                )
+                .layer(
+                    CorsLayer::new()
+                        .allow_origin("*".parse::<HeaderValue>().unwrap())
+                        .allow_methods([
+                            Method::GET,
+                            Method::POST,
+                            Method::PUT,
+                            Method::OPTIONS,
+                            Method::DELETE,
+                        ]),
+                );
 
+            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+            info!("listening on {}", listener.local_addr().unwrap());
+            axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .await
+            .unwrap();
+        }
         Some(Command::Token(token_command)) => match token_command {
             TokenCommand::List => {
                 let token_accounts = token::token_accounts(&client, &wallet.pubkey()).await;

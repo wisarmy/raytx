@@ -22,12 +22,12 @@ pub struct TipPercentileData {
     pub ema_landed_tips_50th_percentile: f64,
 }
 
-pub async fn run_tip_stream() -> Result<()> {
+pub async fn tip_stream() -> Result<()> {
     let (ws_stream, _) = connect_async(TIP_STREAM_URL.to_string())
         .await
         .context("Failed to connect to WebSocket server")?;
 
-    info!("Connected to WebSocket server");
+    info!("Connected to WebSocket server: tip_stream");
 
     let (mut _write, mut read) = ws_stream.split();
 

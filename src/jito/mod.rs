@@ -38,8 +38,8 @@ pub async fn init_tip_accounts() -> Result<()> {
 }
 
 pub async fn get_tip_account() -> Result<Pubkey> {
-    let mut rng = thread_rng();
     let accounts = TIP_ACCOUNTS.read().await;
+    let mut rng = thread_rng();
     match accounts.iter().choose(&mut rng) {
         Some(acc) => Ok(Pubkey::from_str(acc).inspect_err(|err| {
             error!("jito: failed to parse Pubkey: {:?}", err);

@@ -1,3 +1,5 @@
+use std::env;
+
 use anyhow::{Context, Result};
 use reqwest::Proxy;
 use serde::{Deserialize, Serialize};
@@ -21,7 +23,7 @@ pub struct RpcResponse {
 
 pub async fn get_tip_accounts() -> Result<RpcResponse> {
     let mut client_builder = reqwest::Client::builder();
-    if let Ok(http_proxy) = dotenvy::var("HTTP_PROXY") {
+    if let Ok(http_proxy) = env::var("HTTP_PROXY") {
         let proxy = Proxy::all(http_proxy)?;
         client_builder = client_builder.proxy(proxy);
     }
