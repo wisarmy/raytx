@@ -23,7 +23,7 @@ use tracing::{debug, error, info};
 
 use crate::{
     get_rpc_client_blocking,
-    helper::api_ok,
+    helper::{api_error, api_ok},
     jito::{self, get_tip_account, get_tip_value, wait_for_bundle_confirmation},
     raydium::get_pool_info,
     token,
@@ -80,7 +80,6 @@ impl Swap {
             Pubkey::from_str(mint).map_err(|e| anyhow!("failed to parse mint pubkey: {}", e))?;
         let program_id = spl_token::ID;
         let native_mint = spl_token::native_mint::ID;
-        let ata_program = Pubkey::from_str("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")?;
 
         let (token_in, token_out) = match swap_direction {
             SwapDirection::Buy => (native_mint, mint),
@@ -142,7 +141,7 @@ impl Swap {
                             &owner,
                             &owner,
                             &token_out,
-                            &ata_program,
+                            &program_id,
                         ));
                     }
                     Err(error) => error!("error retrieving out ATA: {}", error),
@@ -289,7 +288,18 @@ impl Swap {
             instructions.push(build_swap_instruction)
         }
         if let Some(create_instruction) = create_instruction {
-            instructions.push(create_instruction);
+            if use_jito {
+                instructions.push(create_instruction);
+            } else {
+                let create_tx = Transaction::new_signed_with_payer(
+                    &[create_instruction],
+                    Some(&owner),
+                    &vec![&*self.keypair.clone()],
+                    client.get_latest_blockhash()?,
+                );
+                let create_signature = client.send_and_confirm_transaction(&create_tx)?;
+                info!("Create ATA transaction signature: {}", create_signature);
+            }
         }
         if let Some(close_instruction) = close_instruction {
             instructions.push(close_instruction);
@@ -396,7 +406,7 @@ pub async fn swap_handler(
 
     info!("{:?}, slippage: {}", input, slippage);
 
-    swapx
+    let result = swapx
         .swap(
             input.mint.as_str(),
             input.amount_in,
@@ -405,8 +415,9 @@ pub async fn swap_handler(
             slippage,
             input.jito.unwrap_or(false),
         )
-        .await
-        .unwrap();
-
-    api_ok(())
+        .await;
+    match result {
+        Ok(_) => api_ok(()),
+        Err(err) => api_error(&err.to_string()),
+    }
 }
