@@ -14,29 +14,39 @@ Before getting started, ensure that the following software is installed on your 
 ```
 cargo build -r
 ```
-This will generate an executable file raytx, located in the target/release/ directory.
+This will generate an executable file raytx, located in the target/release/raytx.
 
 ## Using the Command-Line Tool
 *Quote mint only supports wsol*
 ### Buy
 ```
-./target/release/raytx swap <mint> buy --amount-in=<amount-in>
+raytx swap <mint> buy --amount-in=<amount-in>
 ```
 ### Sell
 ```
 # sell 50%
-./target/release/raytx swap <mint> sell --amount-in-pct=0.5
+raytx swap <mint> sell --amount-in-pct=0.5
 
 # sell all, close wallet ata when sell all
-./target/release/raytx swap <mint> sell --amount-in-pct=1
+raytx swap <mint> sell --amount-in-pct=1
 
 # Sell 1000
-./target/release/raytx swap <mint> sell --amount-in=1000
+raytx swap <mint> sell --amount-in=1000
 ```
 Replace <mint> with the address of the token you want to swap, and <amount-in> with the quantity|<amount-in-pct> with the percentage you want to swap.
 
 ### Jito
 Use `--jito` to speed up swap.
+[Read more](./docs/jito.md)
+
+## Using swap api
+
+To start the daemon, use the following command:
+```bash
+raytx daemon
+```
+[More information in the documentation](./docs/api.md)
+
 
 # Contributing
 Contributions to this project are welcome. If you have any questions or suggestions, feel free to raise an issue.
