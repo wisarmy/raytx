@@ -1,7 +1,6 @@
-use std::{env, str::FromStr, sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
-use axum::{debug_handler, extract::State, response::IntoResponse, Json};
 use clap::ValueEnum;
 use jito_json_rpc_client::jsonrpc_client::rpc_client::RpcClient as JitoRpcClient;
 use raydium_library::amm;
@@ -23,15 +22,15 @@ use tracing::{debug, error, info};
 
 use crate::{
     get_rpc_client_blocking,
-    helper::{api_error, api_ok},
     jito::{self, get_tip_account, get_tip_value, wait_for_bundle_confirmation},
     raydium::get_pool_info,
     token,
 };
 
 pub struct Swap {
-    client: Arc<RpcClient>,
-    keypair: Arc<Keypair>,
+    pub client: Arc<RpcClient>,
+    pub keypair: Arc<Keypair>,
+    pub client_blocking: Option<Arc<solana_client::rpc_client::RpcClient>>,
 }
 
 #[derive(ValueEnum, Debug, Clone, Deserialize)]
@@ -61,7 +60,19 @@ pub enum SwapInType {
 
 impl Swap {
     pub fn new(client: Arc<RpcClient>, keypair: Arc<Keypair>) -> Self {
-        Self { client, keypair }
+        Self {
+            client,
+            keypair,
+            client_blocking: None,
+        }
+    }
+
+    pub fn with_blocking_client(
+        &mut self,
+        client: Arc<solana_client::rpc_client::RpcClient>,
+    ) -> &mut Self {
+        self.client_blocking = Some(client);
+        self
     }
 
     pub async fn swap(
@@ -364,56 +375,5 @@ impl Swap {
 
         info!("tx elapsed: {:?}", start_time.elapsed());
         Ok(())
-    }
-}
-
-#[derive(Clone)]
-pub struct AppState {
-    pub client: Arc<RpcClient>,
-    pub wallet: Arc<Keypair>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CreateSwap {
-    mint: String,
-    direction: SwapDirection,
-    amount_in: f64,
-    in_type: Option<SwapInType>,
-    slippage: Option<u64>,
-    jito: Option<bool>,
-}
-
-#[debug_handler]
-pub async fn swap_handler(
-    State(state): State<AppState>,
-    Json(input): Json<CreateSwap>,
-) -> impl IntoResponse {
-    let client = state.client;
-    let wallet = state.wallet;
-    let swapx = Swap::new(client, wallet);
-    let slippage = match input.slippage {
-        Some(v) => v,
-        None => {
-            let slippage = env::var("SLIPPAGE").unwrap_or("5".to_string());
-            let slippage = slippage.parse::<u64>().unwrap_or(5);
-            slippage
-        }
-    };
-
-    info!("{:?}, slippage: {}", input, slippage);
-
-    let result = swapx
-        .swap(
-            input.mint.as_str(),
-            input.amount_in,
-            input.direction.clone(),
-            input.in_type.unwrap_or(SwapInType::Qty),
-            slippage,
-            input.jito.unwrap_or(false),
-        )
-        .await;
-    match result {
-        Ok(_) => api_ok(()),
-        Err(err) => api_error(&err.to_string()),
     }
 }
