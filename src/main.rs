@@ -1,16 +1,17 @@
 use anyhow::Result;
 use axum::{
     http::{HeaderValue, Method},
-    routing::post,
+    routing::{get, post},
     Router,
 };
 use clap::{ArgGroup, Parser, Subcommand};
 #[cfg(feature = "swap_ts")]
 use raytx::swap_ts;
 use raytx::{
-    get_rpc_client, get_wallet, jito, logger,
+    api::{self, AppState},
+    get_rpc_client, get_rpc_client_blocking, get_wallet, jito, logger,
     raydium::get_pool_info,
-    swap::{self, swap_handler, AppState, SwapDirection, SwapInType},
+    swap::{self, SwapDirection, SwapInType},
     token,
 };
 use std::{env, net::SocketAddr, str::FromStr};
@@ -94,6 +95,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     logger::init();
     let client = get_rpc_client()?;
+    let client_blocking = get_rpc_client_blocking()?;
     let wallet = get_wallet()?;
 
     match &cli.command {
@@ -169,12 +171,17 @@ async fn main() -> Result<()> {
                     .await
                     .expect("Failed to get tip percentiles data");
             });
-            let app_state = AppState { client, wallet };
+            let app_state = AppState {
+                client,
+                client_blocking,
+                wallet,
+            };
             let app = Router::new()
                 .nest(
                     "/api",
                     Router::new()
-                        .route("/swap", post(swap_handler))
+                        .route("/swap", post(api::swap))
+                        .route("/pool/:pool_id", get(api::get_pool))
                         .with_state(app_state),
                 )
                 .layer(
