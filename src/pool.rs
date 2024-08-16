@@ -51,6 +51,10 @@ impl Swap {
             &mint_b.0,
         )?;
         debug!("amm_keys: {amm_keys:#?}");
+        if amm_keys.amm_pool != amm_pool_id {
+            warn!("amm_keys's amm_pool not match input pool_id");
+            return Err(anyhow!("internal error"));
+        }
 
         // load market keys
         let market_keys = raydium_library::amm::openbook::get_keys_for_market(
