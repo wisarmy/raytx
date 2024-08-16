@@ -7,6 +7,7 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
+use serde_json::json;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::Keypair;
 use tracing::info;
@@ -78,7 +79,12 @@ pub async fn get_pool(
     let mut swapx = Swap::new(client, wallet);
     swapx.with_blocking_client(state.client_blocking);
     match swapx.get_pool(pool_id.as_str()).await {
-        Ok(data) => api_ok(data),
+        Ok(data) => api_ok(json!({
+            "base": data.0,
+            "quote": data.1,
+            "price": data.2,
+            "sol_price": data.3
+        })),
         Err(err) => api_error(&err.to_string()),
     }
 }

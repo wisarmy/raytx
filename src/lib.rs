@@ -5,6 +5,7 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::Keypair;
 
 pub mod api;
+pub mod constants;
 pub mod helper;
 pub mod jito;
 pub mod logger;
@@ -14,7 +15,6 @@ pub mod swap;
 #[cfg(feature = "swap_ts")]
 pub mod swap_ts;
 pub mod token;
-
 fn get_env_var(key: &str) -> String {
     env::var(key).unwrap_or_else(|_| panic!("Environment variable {} is not set", key))
 }
