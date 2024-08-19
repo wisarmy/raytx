@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_json::json;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::Keypair;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
     helper::{api_error, api_ok},
@@ -65,7 +65,10 @@ pub async fn swap(
         .await;
     match result {
         Ok(_) => api_ok(()),
-        Err(err) => api_error(&err.to_string()),
+        Err(err) => {
+            warn!("swap err: {:#?}", err);
+            api_error(&err.to_string())
+        }
     }
 }
 
@@ -85,6 +88,9 @@ pub async fn get_pool(
             "price": data.2,
             "sol_price": data.3
         })),
-        Err(err) => api_error(&err.to_string()),
+        Err(err) => {
+            warn!("get pool err: {:#?}", err);
+            api_error(&err.to_string())
+        }
     }
 }

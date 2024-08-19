@@ -49,7 +49,7 @@ pub async fn get_pool_info_by_id(pool_id: &str) -> Result<PoolData> {
         .await?
         .json::<PoolData>()
         .await
-        .context("Failed to parse JSON")?;
+        .context("Failed to parse pool info JSON")?;
     Ok(result)
 }
 
@@ -74,7 +74,7 @@ pub async fn get_price(name: &str) -> Result<f64> {
         .await?
         .json::<HashMap<String, CurrencyData>>()
         .await
-        .context("Failed to parse JSON")?;
+        .context("Failed to parse price JSON")?;
     Ok(result
         .get(name)
         .ok_or(anyhow!("failed get {} currency data", name))?

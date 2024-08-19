@@ -17,8 +17,7 @@ impl Swap {
         let amm_pool_id =
             Pubkey::from_str(pool_id).inspect_err(|err| warn!("failed parse pool_id: {}", err))?;
         let pool_info = get_pool_info_by_id(pool_id)
-            .await
-            .inspect_err(|err| warn!("failed get pool: {}", err))?
+            .await?
             .get_pool()
             .ok_or(anyhow!("pool is empty"))?;
         debug!("amm pool id: {:?}", amm_pool_id);
