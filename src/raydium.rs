@@ -1,6 +1,6 @@
 use std::{collections::HashMap, env};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use reqwest::Proxy;
 use serde::Deserialize;
 
@@ -28,7 +28,8 @@ pub async fn get_pool_info(mint1: &str, mint2: &str) -> Result<PoolInfo> {
         .send()
         .await?
         .json::<PoolInfo>()
-        .await?;
+        .await
+        .context("Failed to parse pool info JSON")?;
     Ok(result)
 }
 // get pool info by ids
@@ -47,7 +48,8 @@ pub async fn get_pool_info_by_id(pool_id: &str) -> Result<PoolData> {
         .send()
         .await?
         .json::<PoolData>()
-        .await?;
+        .await
+        .context("Failed to parse JSON")?;
     Ok(result)
 }
 
@@ -71,7 +73,8 @@ pub async fn get_price(name: &str) -> Result<f64> {
         .send()
         .await?
         .json::<HashMap<String, CurrencyData>>()
-        .await?;
+        .await
+        .context("Failed to parse JSON")?;
     Ok(result
         .get(name)
         .ok_or(anyhow!("failed get {} currency data", name))?
