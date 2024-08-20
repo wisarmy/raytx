@@ -1,9 +1,9 @@
 use anyhow::Result;
-use raytx::jito::ws::{run_tip_stream, TIPS_PERCENTILE};
+use raytx::jito::ws::{tip_stream, TIPS_PERCENTILE};
 #[tokio::main]
 async fn main() -> Result<()> {
     tokio::spawn(async {
-        if let Err(e) = run_tip_stream().await {
+        if let Err(e) = tip_stream().await {
             println!("Error: {:?}", e);
         }
     });
