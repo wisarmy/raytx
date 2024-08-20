@@ -256,15 +256,6 @@ impl Pump {
         let mut instructions = vec![];
         if let Some(create_instruction) = create_instruction {
             instructions.push(create_instruction);
-            // let create_tx = Transaction::new_signed_with_payer(
-            //     &[create_instruction],
-            //     Some(&owner),
-            //     &vec![&*self.keypair.clone()],
-            //     client.get_latest_blockhash()?,
-            // );
-
-            // let create_signature = client.send_and_confirm_transaction(&create_tx)?;
-            // info!("Create ATA transaction signature: {}", create_signature);
         }
         if amount_specified > 0 {
             instructions.push(build_swap_instruction)
