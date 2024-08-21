@@ -14,7 +14,8 @@ use tracing::{info, warn};
 
 use crate::{
     helper::{api_error, api_ok},
-    swap::{Swap, SwapDirection, SwapInType},
+    raydium::Raydium,
+    swap::{self, SwapDirection, SwapInType},
 };
 
 #[derive(Clone)]
@@ -39,9 +40,6 @@ pub async fn swap(
     State(state): State<AppState>,
     Json(input): Json<CreateSwap>,
 ) -> impl IntoResponse {
-    let client = state.client;
-    let wallet = state.wallet;
-    let swapx = Swap::new(client, wallet);
     let slippage = match input.slippage {
         Some(v) => v,
         None => {
@@ -53,16 +51,16 @@ pub async fn swap(
 
     info!("{:?}, slippage: {}", input, slippage);
 
-    let result = swapx
-        .swap(
-            input.mint.as_str(),
-            input.amount_in,
-            input.direction.clone(),
-            input.in_type.unwrap_or(SwapInType::Qty),
-            slippage,
-            input.jito.unwrap_or(false),
-        )
-        .await;
+    let result = swap::swap(
+        state,
+        input.mint.as_str(),
+        input.amount_in,
+        input.direction.clone(),
+        input.in_type.unwrap_or(SwapInType::Qty),
+        slippage,
+        input.jito.unwrap_or(false),
+    )
+    .await;
     match result {
         Ok(_) => api_ok(()),
         Err(err) => {
@@ -79,7 +77,7 @@ pub async fn get_pool(
 ) -> impl IntoResponse {
     let client = state.client;
     let wallet = state.wallet;
-    let mut swapx = Swap::new(client, wallet);
+    let mut swapx = Raydium::new(client, wallet);
     swapx.with_blocking_client(state.client_blocking);
     match swapx.get_pool(pool_id.as_str()).await {
         Ok(data) => api_ok(json!({

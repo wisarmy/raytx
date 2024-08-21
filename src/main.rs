@@ -97,6 +97,11 @@ async fn main() -> Result<()> {
     let client = get_rpc_client()?;
     let client_blocking = get_rpc_client_blocking()?;
     let wallet = get_wallet()?;
+    let app_state = AppState {
+        client,
+        client_blocking,
+        wallet,
+    };
 
     match &cli.command {
         #[cfg(feature = "swap_ts")]
@@ -152,17 +157,17 @@ async fn main() -> Result<()> {
                 info!("waiting 5s for get tip percentiles data");
                 tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             }
-            let swapx = swap::Swap::new(client, wallet);
-            swapx
-                .swap(
-                    mint,
-                    *amount_in,
-                    direction.clone(),
-                    in_type,
-                    slippage,
-                    *jito,
-                )
-                .await?;
+
+            swap::swap(
+                app_state,
+                mint,
+                *amount_in,
+                direction.clone(),
+                in_type,
+                slippage,
+                *jito,
+            )
+            .await?
         }
         Some(Command::Daemon { addr }) => {
             jito::init_tip_accounts().await.unwrap();
@@ -171,11 +176,7 @@ async fn main() -> Result<()> {
                     .await
                     .expect("Failed to get tip percentiles data");
             });
-            let app_state = AppState {
-                client,
-                client_blocking,
-                wallet,
-            };
+
             let app = Router::new()
                 .nest(
                     "/api",
@@ -207,12 +208,15 @@ async fn main() -> Result<()> {
         }
         Some(Command::Token(token_command)) => match token_command {
             TokenCommand::List => {
-                let token_accounts = token::token_accounts(&client, &wallet.pubkey()).await;
+                let token_accounts =
+                    token::token_accounts(&app_state.client, &app_state.wallet.pubkey()).await;
                 info!("token_accounts: {:#?}", token_accounts);
             }
             TokenCommand::Show { mint } => {
                 let mint = Pubkey::from_str(mint).expect("failed to parse mint pubkey");
-                let token_account = token::token_account(&client, &wallet.pubkey(), mint).await?;
+                let token_account =
+                    token::token_account(&app_state.client, &app_state.wallet.pubkey(), mint)
+                        .await?;
                 info!("token_account: {:#?}", token_account);
                 let pool_info = get_pool_info(
                     &spl_token::native_mint::id().to_string(),

@@ -8,11 +8,10 @@ use tracing::{debug, info, warn};
 
 use crate::{
     constants::Symbol,
-    raydium::{get_pool_info_by_id, get_price},
-    swap::Swap,
+    raydium::{get_pool_info_by_id, get_price, Raydium},
 };
 
-impl Swap {
+impl Raydium {
     pub async fn get_pool(&self, pool_id: &str) -> Result<(f64, f64, f64, f64)> {
         let amm_pool_id =
             Pubkey::from_str(pool_id).inspect_err(|err| warn!("failed parse pool_id: {}", err))?;
