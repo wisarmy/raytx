@@ -17,6 +17,7 @@ pub mod swap;
 #[cfg(feature = "swap_ts")]
 pub mod swap_ts;
 pub mod token;
+pub mod tx;
 
 fn get_env_var(key: &str) -> String {
     env::var(key).unwrap_or_else(|_| panic!("Environment variable {} is not set", key))

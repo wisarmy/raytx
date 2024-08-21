@@ -1,7 +1,6 @@
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
-use jito_json_rpc_client::jsonrpc_client::rpc_client::RpcClient as JitoRpcClient;
 use raydium_amm::math::U128;
 use raydium_library::amm::TEN_THOUSAND;
 use serde::{Deserialize, Serialize};
@@ -12,21 +11,18 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::Keypair,
     signer::Signer,
-    system_program, system_transaction,
-    transaction::{Transaction, VersionedTransaction},
+    system_program,
 };
 use spl_associated_token_account::instruction::create_associated_token_account;
 use spl_token::{amount_to_ui_amount, ui_amount_to_amount};
 use spl_token_client::token::TokenError;
 
-use tokio::time::Instant;
 use tracing::{debug, error, info, warn};
 
 use crate::{
     get_client_build,
-    jito::{self, get_tip_account, get_tip_value, wait_for_bundle_confirmation},
     swap::{SwapDirection, SwapInType},
-    token,
+    token, tx,
 };
 
 pub const TOKEN_PROGRAM: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
@@ -39,8 +35,6 @@ pub const PUMP_PROGRAM: &str = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 pub const PUMP_ACCOUNT: &str = "Ce6TQqeHC9p8KetsN6JsjHK7UTZk7nasjjnr7XxXp9F1";
 pub const PUMP_BUY_METHOD: u64 = 16927863322537952870;
 pub const PUMP_SELL_METHOD: u64 = 12502976635542562355;
-pub const UNIT_PRICE: u64 = 1_000_000;
-pub const UNIT_BUDGET: u32 = 200_000;
 
 pub struct Pump {
     pub client: Arc<RpcClient>,
@@ -187,6 +181,12 @@ impl Pump {
             .clone()
             .context("failed to get rpc client")?;
 
+        let bonding_curve = Pubkey::from_str(&pump_info.bonding_curve)
+            .map_err(|e| anyhow!("failed to parse associated_bonding_curve pubkey: {}", e))?;
+        let associated_bonding_curve = Pubkey::from_str(&pump_info.associated_bonding_curve)
+            .map_err(|e| anyhow!("failed to parse associated_bonding_curve pubkey: {}", e))?;
+        let pump_program = Pubkey::from_str(PUMP_PROGRAM)?;
+
         // Calculate tokens out
         let virtual_sol_reserves = U128::from(pump_info.virtual_sol_reserves);
         let virtual_token_reserves = U128::from(pump_info.virtual_token_reserves);
@@ -194,7 +194,7 @@ impl Pump {
             / pump_info.virtual_token_reserves as f64)
             / 1000.0;
 
-        let (token_amount, sol_amount_threshold) = match swap_direction {
+        let (token_amount, sol_amount_threshold, input_accouts) = match swap_direction {
             SwapDirection::Buy => {
                 let max_sol_cost = max_amount_with_slippage(amount_specified, slippage_bps);
 
@@ -206,6 +206,20 @@ impl Pump {
                         .unwrap()
                         .as_u64(),
                     max_sol_cost,
+                    vec![
+                        AccountMeta::new_readonly(Pubkey::from_str(PUMP_GLOBAL)?, false),
+                        AccountMeta::new(Pubkey::from_str(PUMP_FEE_RECIPIENT)?, false),
+                        AccountMeta::new_readonly(mint, false),
+                        AccountMeta::new(bonding_curve, false),
+                        AccountMeta::new(associated_bonding_curve, false),
+                        AccountMeta::new(out_ata, false),
+                        AccountMeta::new(owner, true),
+                        AccountMeta::new_readonly(system_program::id(), false),
+                        AccountMeta::new_readonly(program_id, false),
+                        AccountMeta::new_readonly(Pubkey::from_str(RENT_PROGRAM)?, false),
+                        AccountMeta::new_readonly(Pubkey::from_str(PUMP_ACCOUNT)?, false),
+                        AccountMeta::new_readonly(pump_program, false),
+                    ],
                 )
             }
             SwapDirection::Sell => {
@@ -217,7 +231,27 @@ impl Pump {
                     .as_u64();
                 let min_sol_output = min_amount_with_slippage(sol_output, slippage_bps);
 
-                (amount_specified, min_sol_output)
+                (
+                    amount_specified,
+                    min_sol_output,
+                    vec![
+                        AccountMeta::new_readonly(Pubkey::from_str(PUMP_GLOBAL)?, false),
+                        AccountMeta::new(Pubkey::from_str(PUMP_FEE_RECIPIENT)?, false),
+                        AccountMeta::new_readonly(mint, false),
+                        AccountMeta::new(bonding_curve, false),
+                        AccountMeta::new(associated_bonding_curve, false),
+                        AccountMeta::new(in_ata, false),
+                        AccountMeta::new(owner, true),
+                        AccountMeta::new_readonly(system_program::id(), false),
+                        AccountMeta::new_readonly(
+                            Pubkey::from_str(ASSOCIATED_TOKEN_PROGRAM)?,
+                            false,
+                        ),
+                        AccountMeta::new_readonly(program_id, false),
+                        AccountMeta::new_readonly(Pubkey::from_str(PUMP_ACCOUNT)?, false),
+                        AccountMeta::new_readonly(pump_program, false),
+                    ],
+                )
             }
         };
 
@@ -226,32 +260,11 @@ impl Pump {
             token_amount, sol_amount_threshold, unit_price
         );
 
-        let bonding_curve = Pubkey::from_str(&pump_info.bonding_curve)
-            .map_err(|e| anyhow!("failed to parse associated_bonding_curve pubkey: {}", e))?;
-        let associated_bonding_curve = Pubkey::from_str(&pump_info.associated_bonding_curve)
-            .map_err(|e| anyhow!("failed to parse associated_bonding_curve pubkey: {}", e))?;
-
         let build_swap_instruction = Instruction::new_with_bincode(
-            associated_bonding_curve,
+            pump_program,
             &(pump_method, token_amount, sol_amount_threshold),
-            vec![
-                AccountMeta::new_readonly(Pubkey::from_str(PUMP_GLOBAL)?, false),
-                AccountMeta::new(Pubkey::from_str(PUMP_FEE_RECIPIENT)?, false),
-                AccountMeta::new_readonly(mint, false),
-                AccountMeta::new(bonding_curve, false),
-                AccountMeta::new(associated_bonding_curve, false),
-                AccountMeta::new(out_ata, false),
-                AccountMeta::new(owner, true),
-                AccountMeta::new_readonly(system_program::id(), false),
-                AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM)?, false),
-                AccountMeta::new_readonly(Pubkey::from_str(RENT_PROGRAM)?, false),
-                AccountMeta::new_readonly(Pubkey::from_str(PUMP_ACCOUNT)?, false),
-                AccountMeta::new_readonly(Pubkey::from_str(PUMP_PROGRAM)?, false),
-            ],
+            input_accouts,
         );
-        // let modify_compute_units = solana_sdk::compute_budget::ComputeBudgetInstruction::set_compute_unit_price(UNIT_PRICE);
-        // let add_priority_fee = solana_sdk::compute_budget::ComputeBudgetInstruction::set_compute_unit_limit(UNIT_BUDGET);
-
         // build instructions
         let mut instructions = vec![];
         if let Some(create_instruction) = create_instruction {
@@ -267,66 +280,7 @@ impl Pump {
             return Err(anyhow!("instructions is empty, no tx required"));
         }
 
-        // send init tx
-        let recent_blockhash = client.get_latest_blockhash()?;
-        let txn = Transaction::new_signed_with_payer(
-            &instructions,
-            Some(&owner),
-            &vec![&*self.keypair.clone()],
-            recent_blockhash,
-        );
-
-        let start_time = Instant::now();
-        if use_jito {
-            // jito
-            let tip_account = get_tip_account().await?;
-            let jito_client = Arc::new(JitoRpcClient::new(format!(
-                "{}/api/v1/bundles",
-                jito::BLOCK_ENGINE_URL.to_string()
-            )));
-            // jito tip, the upper limit is 0.1
-            let mut tip = get_tip_value().await?;
-            tip = tip.min(0.1);
-            let tip_lamports = ui_amount_to_amount(tip, spl_token::native_mint::DECIMALS);
-            info!(
-                "tip account: {}, tip(sol): {}, lamports: {}",
-                tip_account, tip, tip_lamports
-            );
-            // tip tx
-            let mut bundle: Vec<VersionedTransaction> = vec![];
-            bundle.push(VersionedTransaction::from(txn));
-            bundle.push(VersionedTransaction::from(system_transaction::transfer(
-                &self.keypair,
-                &tip_account,
-                tip_lamports,
-                recent_blockhash,
-            )));
-            let bundle_id = jito_client.send_bundle(&bundle).await?;
-            info!("bundle_id: {}", bundle_id);
-
-            wait_for_bundle_confirmation(
-                move |id: String| {
-                    let client = Arc::clone(&jito_client);
-                    async move {
-                        let response = client.get_bundle_statuses(&[id]).await;
-                        let statuses = response.inspect_err(|err| {
-                            error!("Error fetching bundle status: {:?}", err);
-                        })?;
-                        Ok(statuses.value)
-                    }
-                },
-                bundle_id,
-                Duration::from_millis(1000),
-                Duration::from_secs(30),
-            )
-            .await?;
-        } else {
-            let sig = raydium_library::common::rpc::send_txn(&client, &txn, true)?;
-            info!("signature: {:?}", sig);
-        }
-
-        info!("tx elapsed: {:?}", start_time.elapsed());
-        Ok(())
+        tx::new_signed_and_send(&client, &self.keypair, instructions, use_jito).await
     }
 }
 
