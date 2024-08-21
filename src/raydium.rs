@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env};
+use std::env;
 
 use anyhow::{anyhow, Context, Result};
 use raydium_library::amm;
@@ -326,34 +326,6 @@ pub async fn get_pool_info_by_id(pool_id: &str) -> Result<PoolData> {
         .await
         .context("Failed to parse pool info JSON")?;
     Ok(result)
-}
-
-#[derive(Debug, Deserialize)]
-struct CurrencyData {
-    usd: f64,
-}
-// get sol price
-// https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd
-pub async fn get_price(name: &str) -> Result<f64> {
-    let mut client_builder = reqwest::Client::builder();
-    if let Ok(http_proxy) = env::var("HTTP_PROXY") {
-        let proxy = Proxy::all(http_proxy)?;
-        client_builder = client_builder.proxy(proxy);
-    }
-    let client = client_builder.build()?;
-
-    let result = client
-        .get("https://api.coingecko.com/api/v3/simple/price")
-        .query(&[("ids", name), ("vs_currencies", "usd")])
-        .send()
-        .await?
-        .json::<HashMap<String, CurrencyData>>()
-        .await
-        .context("Failed to parse price JSON")?;
-    Ok(result
-        .get(name)
-        .ok_or(anyhow!("failed get {} currency data", name))?
-        .usd)
 }
 
 impl PoolInfo {

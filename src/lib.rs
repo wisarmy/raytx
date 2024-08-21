@@ -57,5 +57,6 @@ mod tests {
     #[ctor::ctor]
     fn init() {
         crate::logger::init();
+        dotenvy::dotenv().ok();
     }
 }

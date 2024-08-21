@@ -7,8 +7,8 @@ use spl_token_2022::amount_to_ui_amount;
 use tracing::{debug, info, warn};
 
 use crate::{
-    constants::Symbol,
-    raydium::{get_pool_info_by_id, get_price, Raydium},
+    helper::get_solana_price,
+    raydium::{get_pool_info_by_id, Raydium},
 };
 
 impl Raydium {
@@ -90,7 +90,7 @@ impl Raydium {
             "calculate pool: {}: {}, {}: {}, unit_price: {} wsol",
             pool_pc.0 .2, pool_pc_ui_amount, pool_coin.0 .2, pool_coin_ui_amount, unit_price
         );
-        let sol_price = get_price(Symbol::SOLANA)
+        let sol_price = get_solana_price()
             .await
             .inspect_err(|err| warn!("failed get solana price: {}", err))?;
         let coin_price = ((unit_price * sol_price) * 1_000_000_000.0).round() / 1_000_000_000.0;
