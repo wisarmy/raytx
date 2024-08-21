@@ -33,7 +33,7 @@ spl-associated-token-account = { version = "2.2.0", features = [
 tokio-tungstenite = { version = "0.23.1", features = ["native-tls"] }
 futures-util = "0.3.30"
 
-jito-json-rpc-client = { path = "jito/json-rpc-client", package = "jito-block-engine-json-rpc-client" }
+jito-json-rpc-client = { git = "https://github.com/wisarmy/jito-block-engine-json-rpc-client.git", package = "jito-block-engine-json-rpc-client" }
 rand = "0.8.5"
 indicatif = "0.17.8"
 axum = { version = "0.7.5", features = ["macros"] }
