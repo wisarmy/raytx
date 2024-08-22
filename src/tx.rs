@@ -16,9 +16,9 @@ use tokio::time::Instant;
 use tracing::{error, info};
 
 use crate::jito::{self, get_tip_account, get_tip_value, wait_for_bundle_confirmation};
-
-pub const UNIT_PRICE: u64 = 1_000_000;
-pub const UNIT_BUDGET: u32 = 200_000;
+// prioritization fee = UNIT_PRICE * UNIT_BUDGET
+pub const UNIT_PRICE: u64 = 1;
+pub const UNIT_BUDGET: u32 = 300_000;
 
 pub async fn new_signed_and_send(
     client: &RpcClient,

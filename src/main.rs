@@ -70,7 +70,7 @@ enum Command {
     Daemon {
         #[arg(
             long,
-            help = "Start a long-running daemon process",
+            help = "Start a long-running daemon process for swap",
             default_value = "127.0.0.1:7235"
         )]
         addr: String,
