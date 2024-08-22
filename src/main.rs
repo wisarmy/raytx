@@ -68,7 +68,11 @@ enum Command {
         jito: bool,
     },
     Daemon {
-        #[arg(long, help = "use jito to swap", default_value = "127.0.0.1:7235")]
+        #[arg(
+            long,
+            help = "Start a long-running daemon process",
+            default_value = "127.0.0.1:7235"
+        )]
         addr: String,
     },
     #[command(about = "Wrap sol -> wsol")]
