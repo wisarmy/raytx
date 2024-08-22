@@ -16,9 +16,9 @@ use tokio::time::Instant;
 use tracing::{error, info};
 
 use crate::jito::{self, get_tip_account, get_tip_value, wait_for_bundle_confirmation};
-// prioritization fee = UNIT_PRICE * UNIT_BUDGET
+// prioritization fee = UNIT_PRICE * UNIT_LIMIT
 pub const UNIT_PRICE: u64 = 1;
-pub const UNIT_BUDGET: u32 = 300_000;
+pub const UNIT_LIMIT: u32 = 300_000;
 
 pub async fn new_signed_and_send(
     client: &RpcClient,
@@ -34,7 +34,7 @@ pub async fn new_signed_and_send(
             );
         let add_priority_fee =
             solana_sdk::compute_budget::ComputeBudgetInstruction::set_compute_unit_limit(
-                UNIT_BUDGET,
+                UNIT_LIMIT,
             );
         instructions.insert(0, modify_compute_units);
         instructions.insert(1, add_priority_fee);
