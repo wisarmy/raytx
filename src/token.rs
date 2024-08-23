@@ -126,7 +126,7 @@ pub async fn get_account_info(
         .await
         .map_err(TokenError::Client)?
         .ok_or(TokenError::AccountNotFound)
-        .inspect_err(|err| warn!("{}: address {}", err, address))?;
+        .inspect_err(|err| warn!("{} {}: mint {}", account, err, address))?;
 
     if account.owner != spl_token::ID {
         return Err(TokenError::AccountInvalidOwner);
@@ -209,7 +209,8 @@ pub async fn get_mint_info(
         .get_account(*address)
         .await
         .map_err(TokenError::Client)?
-        .ok_or(TokenError::AccountNotFound)?;
+        .ok_or(TokenError::AccountNotFound)
+        .inspect_err(|err| warn!("{} {}: mint {}", address, err, address))?;
 
     if account.owner != spl_token::ID {
         return Err(TokenError::AccountInvalidOwner);
