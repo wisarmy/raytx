@@ -13,7 +13,7 @@ use spl_token_client::{
     client::{ProgramClient, ProgramRpcClient, ProgramRpcClientSendTransaction, RpcClientResponse},
     token::{Token, TokenError, TokenResult},
 };
-use tracing::trace;
+use tracing::{trace, warn};
 
 pub type TokenAccounts = Vec<TokenAccount>;
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -125,7 +125,8 @@ pub async fn get_account_info(
         .get_account(*account)
         .await
         .map_err(TokenError::Client)?
-        .ok_or(TokenError::AccountNotFound)?;
+        .ok_or(TokenError::AccountNotFound)
+        .inspect_err(|err| warn!("{}: address {}", err, address))?;
 
     if account.owner != spl_token::ID {
         return Err(TokenError::AccountInvalidOwner);
