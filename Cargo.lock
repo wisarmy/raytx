@@ -738,6 +738,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
+name = "base64"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
 name = "base64ct"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3717,10 +3723,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "base64 0.22.1",
+ "borsh 1.5.1",
+ "bs58 0.5.1",
  "clap 4.5.7",
  "ctor",
  "dotenvy",
  "futures-util",
+ "hex",
  "indicatif",
  "jito-block-engine-json-rpc-client",
  "rand 0.8.5",
@@ -3733,6 +3743,7 @@ dependencies = [
  "solana-account-decoder",
  "solana-client",
  "solana-sdk",
+ "solana-transaction-status",
  "spl-associated-token-account",
  "spl-token 4.0.0",
  "spl-token-2022 0.9.0",

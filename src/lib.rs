@@ -10,6 +10,7 @@ pub mod constants;
 pub mod helper;
 pub mod jito;
 pub mod logger;
+pub mod parser;
 pub mod pool;
 pub mod pump;
 pub mod raydium;

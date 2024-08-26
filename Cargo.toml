@@ -38,11 +38,18 @@ rand = "0.8.5"
 indicatif = "0.17.8"
 axum = { version = "0.7.5", features = ["macros"] }
 tower-http = { version = "0.5.2", features = ["cors"] }
+base64 = "0.22.1"
+hex = "0.4.3"
+borsh = { version = "1.5.1", features = ["derive"] }
+solana-transaction-status = "=1.16.27"
+bs58 = "0.5.1"
+
 
 [dev-dependencies]
 ctor = "0.2.8"
 
 
 [features]
+default = []
 slow_tests = []
 swap_ts = []
