@@ -13,7 +13,7 @@ pub enum Encoding {
 }
 
 pub fn to_hex(input: &str, encoding: Encoding) -> Result<String> {
-    bytes_to_hex(to_bytes(input, encoding)?)
+    Ok(hex::encode(to_bytes(input, encoding)?))
 }
 
 pub fn to_bytes(input: &str, encoding: Encoding) -> Result<Vec<u8>> {
@@ -28,12 +28,4 @@ pub fn to_bytes(input: &str, encoding: Encoding) -> Result<Vec<u8>> {
             })?,
     };
     Ok(raw_bytes)
-}
-
-pub fn bytes_to_hex<T>(data: T) -> Result<String>
-where
-    T: AsRef<[u8]>,
-{
-    let hex_data = hex::encode(data);
-    Ok(hex_data)
 }
