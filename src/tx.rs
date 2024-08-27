@@ -26,6 +26,9 @@ pub async fn new_signed_and_send(
     mut instructions: Vec<Instruction>,
     use_jito: bool,
 ) -> Result<()> {
+    if instructions.len() == 0 {
+        return Err(anyhow!("instructions is empty, no tx required"));
+    }
     // If not using Jito, manually set the compute unit price and limit
     if !use_jito {
         let modify_compute_units =

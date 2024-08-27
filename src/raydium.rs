@@ -271,9 +271,6 @@ impl Raydium {
         if let Some(close_instruction) = close_instruction {
             instructions.push(close_instruction);
         }
-        if instructions.len() == 0 {
-            return Err(anyhow!("instructions is empty, no tx required"));
-        }
 
         tx::new_signed_and_send(&client, &self.keypair, instructions, use_jito).await
     }
