@@ -3,7 +3,10 @@ use anyhow::Result;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use tracing::{debug, info};
 
-use super::{to_bytes, Encoding};
+use super::{
+    discriminator::{DISC_EVENT, DISC_ROUTE},
+    to_bytes, Encoding,
+};
 
 pub async fn parse(tx: EncodedConfirmedTransactionWithStatusMeta) {
     match tx.transaction.transaction {
@@ -56,9 +59,19 @@ pub async fn parse(tx: EncodedConfirmedTransactionWithStatusMeta) {
 
 pub fn parse_data<T: AnchorDeserialize>(data: &str) -> Result<T> {
     let bytes = to_bytes(data, Encoding::Base58)?;
+    let discriminator = &bytes[0..8];
 
-    let parsed_data = T::deserialize(&mut bytes.as_slice())?;
-    // let parsed_data = T::try_from_slice(&bytes)?;
+    let bytes = match discriminator {
+        // route 0..8
+        _ if discriminator == DISC_ROUTE.as_ref() => &bytes[8..],
+        // event 0..8
+        // 8..16 SwapEvent|FeeEvent..
+        _ if discriminator == DISC_EVENT.as_ref() => &bytes[16..],
+        _ => &bytes[..],
+    };
+
+    // let parsed_data = T::deserialize(&mut bytes)?;
+    let parsed_data = T::try_from_slice(bytes)?;
     Ok(parsed_data)
 }
 

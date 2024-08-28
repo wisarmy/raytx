@@ -1,8 +1,7 @@
 use anchor_lang::prelude::*;
 
 #[derive(AnchorDeserialize, Debug, PartialEq)]
-pub struct BuyInsData {
-    pub id: u8,
+pub struct Route {
     pub route_plan: Vec<RoutePlanStep>,
     pub in_amount: u64,
     pub quoted_out_amount: u64,
@@ -177,7 +176,7 @@ mod tests {
     use std::str::FromStr;
     use tracing::debug;
 
-    use crate::parser::transaction::{parse_data, parse_event};
+    use crate::parser::transaction::parse_data;
 
     use super::*;
 
@@ -187,11 +186,13 @@ mod tests {
         let data = "PrpFmsY4d26dKbdKMAXs4neVE2yj1DtChrbeqP7wzojhcyUY";
         // let hex = crate::parser::to_hex(data, crate::parser::Encoding::Base58).unwrap();
         // tracing::info!("hex: {}", hex);
-        let buy_ins_data = parse_data::<BuyInsData>(data).unwrap();
+        let bytes = crate::parser::to_bytes(data, crate::parser::Encoding::Base58).unwrap();
+        println!("bytes: {:?}", bytes.len());
+
+        let ins_route = parse_data::<Route>(data).unwrap();
         assert_eq!(
-            buy_ins_data,
-            BuyInsData {
-                id: 1,
+            ins_route,
+            Route {
                 route_plan: vec![RoutePlanStep {
                     swap: Swap::Raydium,
                     percent: 100,
@@ -214,10 +215,7 @@ mod tests {
         // let bytes = crate::parser::to_bytes(data, crate::parser::Encoding::Base58).unwrap();
         // println!("bytes: {:?}", bytes);
 
-        let swap_event = parse_event::<SwapEvent>(data).unwrap();
-        // let mut event_name = [0u8; 8];
-        // event_name.copy_from_slice("SwapEvent".as_bytes());
-
+        let swap_event = parse_data::<SwapEvent>(data).unwrap();
         debug!("swap_event: {:?}", swap_event);
         assert_eq!(
             swap_event,
@@ -242,7 +240,7 @@ mod tests {
         // let bytes = crate::parser::to_bytes(data, crate::parser::Encoding::Base58).unwrap();
         // println!("bytes: {:?}", bytes);
 
-        let fee_event = parse_event::<FeeEvent>(data).unwrap();
+        let fee_event = parse_data::<FeeEvent>(data).unwrap();
         // let mut event_name = [0u8; 8];
         // event_name.copy_from_slice("SwapEvent".as_bytes());
 
