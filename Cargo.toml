@@ -40,9 +40,10 @@ axum = { version = "0.7.5", features = ["macros"] }
 tower-http = { version = "0.5.2", features = ["cors"] }
 base64 = "0.22.1"
 hex = "0.4.3"
-borsh = { version = "1.5.1", features = ["derive"] }
 solana-transaction-status = "=1.16.27"
 bs58 = "0.5.1"
+spl-discriminator = "0.3.0"
+anchor-lang = "0.29.0"
 
 
 [dev-dependencies]

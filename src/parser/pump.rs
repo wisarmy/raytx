@@ -1,6 +1,6 @@
-use borsh::BorshDeserialize;
+use anchor_lang::prelude::*;
 
-#[derive(BorshDeserialize, Debug, PartialEq)]
+#[derive(AnchorDeserialize, Debug, PartialEq)]
 pub struct BuyInsData {
     pub method: u64,
     pub amount: u64,

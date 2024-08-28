@@ -1,7 +1,6 @@
 use std::{env, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
-use borsh::{BorshDeserialize, BorshSerialize};
 
 use futures_util::{SinkExt, StreamExt};
 use raytx::{get_rpc_client, get_rpc_client_blocking, logger, parser, pump::PUMP_PROGRAM};
@@ -14,18 +13,6 @@ use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTra
 use tokio::{sync::Mutex, time};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info};
-
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug)]
-struct ProgramData {
-    mint: String,
-    // sol_amount: u64,
-    // token_amount: u64,
-    // is_buy: bool,
-    // user: String,
-    // timestamp: i64,
-    // virtual_sol_reserves: u64,
-    // virtual_token_reserves: u64,
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {

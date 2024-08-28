@@ -1,7 +1,7 @@
 // use raydium_amm::instruction::{AmmInstruction, SwapInstructionBaseIn};
-use borsh::BorshDeserialize;
+use anchor_lang::prelude::*;
 
-#[derive(BorshDeserialize, Debug, PartialEq)]
+#[derive(AnchorDeserialize, Debug, PartialEq)]
 pub struct BuyInsData {
     pub discriminator: u8,
     // SOURCE amount to transfer, output to DESTINATION is based on the exchange rate

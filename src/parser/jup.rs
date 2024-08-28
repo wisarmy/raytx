@@ -1,6 +1,6 @@
-use borsh::BorshDeserialize;
+use anchor_lang::prelude::*;
 
-#[derive(BorshDeserialize, Debug, PartialEq)]
+#[derive(AnchorDeserialize, Debug, PartialEq)]
 pub struct BuyInsData {
     pub id: u8,
     pub route_plan: Vec<RoutePlanStep>,
@@ -10,7 +10,7 @@ pub struct BuyInsData {
     pub platform_fee_bps: u8,
 }
 
-#[derive(BorshDeserialize, Debug, PartialEq)]
+#[derive(AnchorDeserialize, Debug, PartialEq)]
 pub struct RoutePlanStep {
     pub swap: Swap,
     pub percent: u8,
@@ -18,13 +18,13 @@ pub struct RoutePlanStep {
     pub output_index: u8,
 }
 
-#[derive(BorshDeserialize, Copy, Clone, Debug, PartialEq)]
+#[derive(AnchorDeserialize, Copy, Clone, Debug, PartialEq)]
 pub enum Side {
     Bid,
     Ask,
 }
 
-#[derive(BorshDeserialize, Clone, PartialEq, Debug)]
+#[derive(AnchorDeserialize, Clone, PartialEq, Debug)]
 pub enum Swap {
     Saber,
     SaberAddDecimalsDeposit,
@@ -129,7 +129,7 @@ pub enum Swap {
     },
 }
 
-#[derive(BorshDeserialize, Clone, PartialEq, Eq, Debug)]
+#[derive(AnchorDeserialize, Clone, PartialEq, Eq, Debug)]
 pub enum AccountsType {
     TransferHookA,
     TransferHookB,
@@ -142,25 +142,47 @@ pub enum AccountsType {
     //TickArrayTwo,
 }
 
-#[derive(BorshDeserialize, Clone, Debug, PartialEq)]
+#[derive(AnchorDeserialize, Clone, Debug, PartialEq)]
 pub struct RemainingAccountsSlice {
     pub accounts_type: AccountsType,
     pub length: u8,
 }
 
-#[derive(BorshDeserialize, Clone, Debug, PartialEq)]
+#[derive(AnchorDeserialize, Clone, Debug, PartialEq)]
 pub struct RemainingAccountsInfo {
     pub slices: Vec<RemainingAccountsSlice>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+#[event]
+pub struct SwapEvent {
+    // pub unknown: [u8; 8],
+    // pub discriminator: [u8; 8],
+    pub amm: Pubkey,
+    pub input_mint: Pubkey,
+    pub input_amount: u64,
+    pub output_mint: Pubkey,
+    pub output_amount: u64,
+}
+#[derive(Clone, Debug, PartialEq)]
+#[event]
+pub struct FeeEvent {
+    pub account: Pubkey,
+    pub mint: Pubkey,
+    pub amount: u64,
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::parser::transaction::parse_data;
+    use std::str::FromStr;
+    use tracing::debug;
+
+    use crate::parser::transaction::{parse_data, parse_event};
 
     use super::*;
 
     #[test]
-    fn test_parse() {
+    fn test_parse_route() {
         // Signature 2aBMaQvN8StxvedeExc8sGWfBUTC1co9ZnUXE7UE5UDboFWbrxrXvV7bXeWRSY6hhpU1RuNSVTHVFmoE6sfdcDDd
         let data = "PrpFmsY4d26dKbdKMAXs4neVE2yj1DtChrbeqP7wzojhcyUY";
         // let hex = crate::parser::to_hex(data, crate::parser::Encoding::Base58).unwrap();
@@ -180,6 +202,57 @@ mod tests {
                 quoted_out_amount: 1440710470524,
                 slippage_bps: 30,
                 platform_fee_bps: 85,
+            }
+        )
+    }
+    #[test]
+    fn test_parse_swap_event() {
+        // Signature 2aBMaQvN8StxvedeExc8sGWfBUTC1co9ZnUXE7UE5UDboFWbrxrXvV7bXeWRSY6hhpU1RuNSVTHVFmoE6sfdcDDd
+        let data = "QMqFu4fYGGeUEysFnenhAvR83g86EDDNxzUskfkWKYCBPWe1hqgD6jgKAXr6aYoEQaxoqYMTvWgPVk2AHWGHjdbNiNtoaPfZA4znu6cRUSWSeJGEtRzSATxShVULX7AV7pkjEGEJC238f26YypQrekApRHctXJgbPUffrWstS1Qn9Ry";
+        // let hex = crate::parser::to_hex(data, crate::parser::Encoding::Base58).unwrap();
+        // tracing::info!("hex: {}", hex);
+        // let bytes = crate::parser::to_bytes(data, crate::parser::Encoding::Base58).unwrap();
+        // println!("bytes: {:?}", bytes);
+
+        let swap_event = parse_event::<SwapEvent>(data).unwrap();
+        // let mut event_name = [0u8; 8];
+        // event_name.copy_from_slice("SwapEvent".as_bytes());
+
+        debug!("swap_event: {:?}", swap_event);
+        assert_eq!(
+            swap_event,
+            SwapEvent {
+                // name: event_name,
+                amm: Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8").unwrap(),
+                input_mint: Pubkey::from_str("So11111111111111111111111111111111111111112")
+                    .unwrap(),
+                input_amount: 100000000000,
+                output_mint: Pubkey::from_str("26KMQVgDUoB6rEfnJ51yAABWWJND8uMtpnQgsHQ64Udr")
+                    .unwrap(),
+                output_amount: 1448740533191,
+            }
+        )
+    }
+    #[test]
+    fn test_parse_fee_event() {
+        // Signature 2aBMaQvN8StxvedeExc8sGWfBUTC1co9ZnUXE7UE5UDboFWbrxrXvV7bXeWRSY6hhpU1RuNSVTHVFmoE6sfdcDDd
+        let data = "2qWhKzSZDTHhTkHUC1NYnTg1JTQB8w3LyKHBewbcWr6F74fYXwS2M6TgRGCBjD7Rsufm6sQzW62bEyqXQpxo9Rr4JYvWVPVyzFgxeF4DwmimGfDhkohmzDqZH";
+        // let hex = crate::parser::to_hex(data, crate::parser::Encoding::Base58).unwrap();
+        // tracing::info!("hex: {}", hex);
+        // let bytes = crate::parser::to_bytes(data, crate::parser::Encoding::Base58).unwrap();
+        // println!("bytes: {:?}", bytes);
+
+        let fee_event = parse_event::<FeeEvent>(data).unwrap();
+        // let mut event_name = [0u8; 8];
+        // event_name.copy_from_slice("SwapEvent".as_bytes());
+
+        debug!("fee_event: {:?}", fee_event);
+        assert_eq!(
+            fee_event,
+            FeeEvent {
+                account: Pubkey::from_str("KViqiev9hum4PsvQmYkNcqfHBjGQiuDqpv88RpAinh9").unwrap(),
+                mint: Pubkey::from_str("26KMQVgDUoB6rEfnJ51yAABWWJND8uMtpnQgsHQ64Udr").unwrap(),
+                amount: 12314294532,
             }
         )
     }
