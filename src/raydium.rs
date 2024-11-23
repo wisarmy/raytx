@@ -5,19 +5,27 @@ use raydium_library::amm;
 use reqwest::Proxy;
 use serde::Deserialize;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer};
+use solana_sdk::{
+    // native_token::LAMPORTS_PER_SOL,
+    program_pack::Pack,
+    pubkey::Pubkey,
+    signature::Keypair,
+    signer::Signer,
+    system_instruction,
+};
 use spl_associated_token_account::instruction::create_associated_token_account;
 use spl_token::{amount_to_ui_amount, ui_amount_to_amount};
 use spl_token_client::token::TokenError;
 use std::{str::FromStr, sync::Arc};
-
-use tracing::{debug, error, info};
 
 use crate::{
     get_rpc_client_blocking,
     swap::{SwapDirection, SwapInType},
     token, tx,
 };
+use spl_token::state::Account;
+
+use tracing::{debug, error, info};
 
 pub struct Raydium {
     pub client: Arc<RpcClient>,
@@ -71,15 +79,6 @@ impl Raydium {
             &token_in,
             &owner,
         );
-        let in_account = token::get_account_info(
-            self.client.clone(),
-            self.keypair.clone(),
-            &token_in,
-            &in_ata,
-        )
-        .await?;
-        let in_mint =
-            token::get_mint_info(self.client.clone(), self.keypair.clone(), &token_in).await?;
         let out_ata = token::get_associated_token_address(
             self.client.clone(),
             self.keypair.clone(),
@@ -131,6 +130,16 @@ impl Raydium {
                 )
             }
             SwapDirection::Sell => {
+                let in_account = token::get_account_info(
+                    self.client.clone(),
+                    self.keypair.clone(),
+                    &token_in,
+                    &in_ata,
+                )
+                .await?;
+                let in_mint =
+                    token::get_mint_info(self.client.clone(), self.keypair.clone(), &token_in)
+                        .await?;
                 let amount = match in_type {
                     SwapInType::Qty => ui_amount_to_amount(amount_in, in_mint.base.decimals),
                     SwapInType::Pct => {
@@ -244,29 +253,103 @@ impl Raydium {
             swap_base_in,
             slippage_bps,
         )?;
-        // build swap instruction
-        let build_swap_instruction = raydium_library::amm::swap(
-            &amm_program,
-            &amm_keys,
-            &market_keys,
-            &owner,
-            &in_ata,
-            &out_ata,
-            amount_specified,
-            other_amount_threshold,
-            swap_base_in,
-        )?;
-        info!(
-            "amount_specified: {}, other_amount_threshold: {}",
-            amount_specified, other_amount_threshold
-        );
         // build instructions
         let mut instructions = vec![];
+        // sol <-> wsol support
+        let mut wsol_account = None;
+        if token_in == native_mint || token_out == native_mint {
+            // create tmp wsol account
+            // let wsol_keypair = Keypair::new();
+            // wsol_account = Some(wsol_keypair.pubkey());
+
+            // 生成一个随机的32字节种子
+            let seed = &format!("{}", Keypair::new().pubkey())[..32];
+
+            // 使用 create_with_seed 派生地址
+            let wsol_pubkey = Pubkey::create_with_seed(&owner, seed, &spl_token::id())?;
+
+            wsol_account = Some(wsol_pubkey);
+
+            // LAMPORTS_PER_SOL / 100 // 0.01 SOL as rent
+            // get rent
+            let rent = self
+                .client
+                .get_minimum_balance_for_rent_exemption(Account::LEN)
+                .await?;
+            // if buy add amount_specified
+            let total_amount = if token_in == native_mint {
+                rent + amount_specified
+            } else {
+                rent
+            };
+            // create tmp wsol account
+            instructions.push(system_instruction::create_account_with_seed(
+                &owner,
+                &wsol_pubkey,
+                &owner,
+                seed,
+                total_amount,
+                Account::LEN as u64, // 165, // Token account size
+                &spl_token::id(),
+            ));
+
+            // initialize account
+            instructions.push(spl_token::instruction::initialize_account(
+                &spl_token::id(),
+                &wsol_pubkey,
+                &native_mint,
+                &owner,
+            )?);
+        }
+
         if let Some(create_instruction) = create_instruction {
             instructions.push(create_instruction);
         }
         if amount_specified > 0 {
-            instructions.push(build_swap_instruction)
+            let mut close_wsol_account_instruction = None;
+            // replace native mint with tmp wsol account
+            let mut final_in_ata = in_ata;
+            let mut final_out_ata = out_ata;
+
+            if let Some(wsol_account) = wsol_account {
+                match swap_direction {
+                    SwapDirection::Buy => {
+                        final_in_ata = wsol_account;
+                    }
+                    SwapDirection::Sell => {
+                        final_out_ata = wsol_account;
+                    }
+                }
+                close_wsol_account_instruction = Some(spl_token::instruction::close_account(
+                    &program_id,
+                    &wsol_account,
+                    &owner,
+                    &owner,
+                    &vec![&owner],
+                )?);
+            }
+
+            // build swap instruction
+            let build_swap_instruction = raydium_library::amm::swap(
+                &amm_program,
+                &amm_keys,
+                &market_keys,
+                &owner,
+                &final_in_ata,
+                &final_out_ata,
+                amount_specified,
+                other_amount_threshold,
+                swap_base_in,
+            )?;
+            info!(
+                "amount_specified: {}, other_amount_threshold: {}, wsol_account: {:?}",
+                amount_specified, other_amount_threshold, wsol_account
+            );
+            instructions.push(build_swap_instruction);
+            // close wsol account
+            if let Some(close_wsol_account_instruction) = close_wsol_account_instruction {
+                instructions.push(close_wsol_account_instruction);
+            }
         }
         if let Some(close_instruction) = close_instruction {
             instructions.push(close_instruction);

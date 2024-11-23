@@ -82,22 +82,12 @@ impl Pump {
         };
 
         let pump_info = get_pump_info(&mint.to_string()).await?;
-
         let in_ata = token::get_associated_token_address(
             self.client.clone(),
             self.keypair.clone(),
             &token_in,
             &owner,
         );
-        let in_account = token::get_account_info(
-            self.client.clone(),
-            self.keypair.clone(),
-            &token_in,
-            &in_ata,
-        )
-        .await?;
-        let in_mint =
-            token::get_mint_info(self.client.clone(), self.keypair.clone(), &token_in).await?;
         let out_ata = token::get_associated_token_address(
             self.client.clone(),
             self.keypair.clone(),
@@ -141,6 +131,16 @@ impl Pump {
                 )
             }
             SwapDirection::Sell => {
+                let in_account = token::get_account_info(
+                    self.client.clone(),
+                    self.keypair.clone(),
+                    &token_in,
+                    &in_ata,
+                )
+                .await?;
+                let in_mint =
+                    token::get_mint_info(self.client.clone(), self.keypair.clone(), &token_in)
+                        .await?;
                 let amount = match in_type {
                     SwapInType::Qty => ui_amount_to_amount(amount_in, in_mint.base.decimals),
                     SwapInType::Pct => {

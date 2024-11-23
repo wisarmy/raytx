@@ -17,7 +17,6 @@ cargo build -r
 This will generate an executable file raytx, located in the target/release/raytx.
 
 ## Using the Command-Line Tool
-*Quote mint only supports wsol*
 ### Buy
 ```
 raytx swap <mint> buy --amount-in=<amount-in>
