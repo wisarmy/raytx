@@ -258,16 +258,9 @@ impl Raydium {
         // sol <-> wsol support
         let mut wsol_account = None;
         if token_in == native_mint || token_out == native_mint {
-            // create tmp wsol account
-            // let wsol_keypair = Keypair::new();
-            // wsol_account = Some(wsol_keypair.pubkey());
-
-            // 生成一个随机的32字节种子
+            // create wsol account
             let seed = &format!("{}", Keypair::new().pubkey())[..32];
-
-            // 使用 create_with_seed 派生地址
             let wsol_pubkey = Pubkey::create_with_seed(&owner, seed, &spl_token::id())?;
-
             wsol_account = Some(wsol_pubkey);
 
             // LAMPORTS_PER_SOL / 100 // 0.01 SOL as rent

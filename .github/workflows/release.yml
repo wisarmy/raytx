@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    name: Release - ${{ matrix.platform.release_for }}
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      matrix:
+        platform:
+          - release_for: Linux-x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: raytx
+            name: raytx-linux-amd64
+
+          - release_for: Windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: raytx.exe
+            name: raytx-windows-amd64.exe
+
+          - release_for: macOS-x86_64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            bin: raytx
+            name: raytx-macos-amd64
+
+          - release_for: macOS-aarch64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            bin: raytx
+            name: raytx-macos-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Build
+        run: |
+          cargo build --release --target ${{ matrix.platform.target }}
+
+      - name: Prepare assets
+        shell: bash
+        run: |
+          cd target/${{ matrix.platform.target }}/release
+          mv ${{ matrix.platform.bin }} ${{ matrix.platform.name }}
+
+      - name: Generate SHA256
+        shell: bash
+        run: |
+          cd target/${{ matrix.platform.target }}/release
+          sha256sum ${{ matrix.platform.name }} > ${{ matrix.platform.name }}.sha256
+
+      - name: Upload binaries to release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            target/${{ matrix.platform.target }}/release/${{ matrix.platform.name }}
+            target/${{ matrix.platform.target }}/release/${{ matrix.platform.name }}.sha256
+          draft: false
+          prerelease: false
