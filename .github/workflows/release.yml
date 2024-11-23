@@ -57,7 +57,7 @@ jobs:
       - name: Upload binaries to release
         uses: softprops/action-gh-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.ACTION_TOKEN }}
         with:
           files: |
             target/${{ matrix.platform.target }}/release/${{ matrix.platform.name }}
