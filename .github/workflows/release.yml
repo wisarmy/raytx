@@ -8,6 +8,7 @@ on:
 jobs:
   release:
     name: Release - ${{ matrix.platform.release_for }}
+    permissions: write-all
     runs-on: ${{ matrix.platform.os }}
     strategy:
       matrix:
@@ -57,7 +58,7 @@ jobs:
       - name: Upload binaries to release
         uses: softprops/action-gh-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.ACTION_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: |
             target/${{ matrix.platform.target }}/release/${{ matrix.platform.name }}
