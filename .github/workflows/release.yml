@@ -54,12 +54,6 @@ jobs:
           cd target/${{ matrix.platform.target }}/release
           mv ${{ matrix.platform.bin }} ${{ matrix.platform.name }}
 
-      - name: Generate SHA256
-        shell: bash
-        run: |
-          cd target/${{ matrix.platform.target }}/release
-          sha256sum ${{ matrix.platform.name }} > ${{ matrix.platform.name }}.sha256
-
       - name: Upload binaries to release
         uses: softprops/action-gh-release@v1
         env:
@@ -67,6 +61,5 @@ jobs:
         with:
           files: |
             target/${{ matrix.platform.target }}/release/${{ matrix.platform.name }}
-            target/${{ matrix.platform.target }}/release/${{ matrix.platform.name }}.sha256
           draft: false
           prerelease: false
