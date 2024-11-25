@@ -14,6 +14,7 @@ use tracing::{info, warn};
 
 use crate::{
     helper::{api_error, api_ok},
+    pump::{get_pump_info, RaydiumInfo},
     raydium::Raydium,
     swap::{self, SwapDirection, SwapInType},
 };
@@ -84,11 +85,43 @@ pub async fn get_pool(
             "base": data.0,
             "quote": data.1,
             "price": data.2,
-            "sol_price": data.3
+            "usd_price": data.3,
+            "sol_price": data.4,
         })),
         Err(err) => {
             warn!("get pool err: {:#?}", err);
             api_error(&err.to_string())
         }
     }
+}
+
+pub async fn coins(State(state): State<AppState>, Path(mint): Path<String>) -> impl IntoResponse {
+    let client = state.client;
+    let wallet = state.wallet;
+    // query from pump.fun
+    let mut pump_info = match get_pump_info(&mint).await {
+        Ok(info) => info,
+        Err(err) => {
+            return api_error(&err.to_string());
+        }
+    };
+    if pump_info.raydium_pool.is_string() {
+        let pool_id = pump_info.raydium_pool.as_str().unwrap();
+        let mut swapx = Raydium::new(client, wallet);
+        swapx.with_blocking_client(state.client_blocking);
+        match swapx.get_pool_price(pool_id).await {
+            Ok(data) => {
+                pump_info.raydium_info = Some(RaydiumInfo {
+                    base: data.0,
+                    quote: data.1,
+                    price: data.2,
+                });
+            }
+            Err(err) => {
+                warn!("get raydium pool price err: {:#?}", err);
+            }
+        }
+    }
+
+    return api_ok(pump_info);
 }

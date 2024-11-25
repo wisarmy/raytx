@@ -12,7 +12,19 @@ use crate::{
 };
 
 impl Raydium {
-    pub async fn get_pool(&self, pool_id: &str) -> Result<(f64, f64, f64, f64)> {
+    pub async fn get_pool(&self, pool_id: &str) -> Result<(f64, f64, f64, f64, f64)> {
+        let (base, quote, price) = self.get_pool_price(pool_id).await?;
+        let sol_price = get_solana_price()
+            .await
+            .inspect_err(|err| warn!("failed get solana price: {}", err))?;
+        let usd_price = ((price * sol_price) * 1_000_000_000.0).round() / 1_000_000_000.0;
+
+        info!("sol price: {}, usd_price: {} ", sol_price, usd_price);
+
+        Ok((base, quote, price, usd_price, sol_price))
+    }
+
+    pub async fn get_pool_price(&self, pool_id: &str) -> Result<(f64, f64, f64)> {
         let amm_pool_id =
             Pubkey::from_str(pool_id).inspect_err(|err| warn!("failed parse pool_id: {}", err))?;
         let pool_info = get_pool_info_by_id(pool_id)
@@ -85,26 +97,13 @@ impl Raydium {
 
         let pool_pc_ui_amount = amount_to_ui_amount(pool_pc.1, pool_pc.0 .1);
         let pool_coin_ui_amount = amount_to_ui_amount(pool_coin.1, pool_coin.0 .1);
-        let unit_price = pool_pc_ui_amount / pool_coin_ui_amount;
-        info!(
-            "calculate pool: {}: {}, {}: {}, unit_price: {} wsol",
-            pool_pc.0 .2, pool_pc_ui_amount, pool_coin.0 .2, pool_coin_ui_amount, unit_price
-        );
-        let sol_price = get_solana_price()
-            .await
-            .inspect_err(|err| warn!("failed get solana price: {}", err))?;
-        let coin_price = ((unit_price * sol_price) * 1_000_000_000.0).round() / 1_000_000_000.0;
+        let price = pool_pc_ui_amount / pool_coin_ui_amount;
 
         info!(
-            "sol price: {}, {} price: {} ",
-            sol_price, pool_coin.0 .2, coin_price
+            "calculate pool: {}: {}, {}: {}, price: {} sol",
+            pool_pc.0 .2, pool_pc_ui_amount, pool_coin.0 .2, pool_coin_ui_amount, price
         );
 
-        Ok((
-            pool_coin_ui_amount,
-            pool_pc_ui_amount,
-            coin_price,
-            sol_price,
-        ))
+        Ok((pool_coin_ui_amount, pool_pc_ui_amount, price))
     }
 }

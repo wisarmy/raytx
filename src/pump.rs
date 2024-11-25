@@ -298,7 +298,12 @@ fn max_amount_with_slippage(input_amount: u64, slippage_bps: u64) -> u64 {
         .checked_div(TEN_THOUSAND)
         .unwrap()
 }
-
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RaydiumInfo {
+    pub base: f64,
+    pub quote: f64,
+    pub price: f64,
+}
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PumpInfo {
     pub mint: String,
@@ -314,6 +319,7 @@ pub struct PumpInfo {
     pub creator: String,
     pub created_timestamp: u64,
     pub raydium_pool: Value,
+    pub raydium_info: Option<RaydiumInfo>,
     pub complete: bool,
     pub virtual_sol_reserves: u64,
     pub virtual_token_reserves: u64,
