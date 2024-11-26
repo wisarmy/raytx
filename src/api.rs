@@ -1,4 +1,4 @@
-use std::{env, sync::Arc};
+use std::{env, str::FromStr, sync::Arc};
 
 use axum::{
     debug_handler,
@@ -9,7 +9,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::json;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::signature::Keypair;
+use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer};
 use tracing::{info, warn};
 
 use crate::{
@@ -17,6 +17,7 @@ use crate::{
     pump::{get_pump_info, RaydiumInfo},
     raydium::Raydium,
     swap::{self, SwapDirection, SwapInType},
+    token,
 };
 
 #[derive(Clone)]
@@ -124,4 +125,45 @@ pub async fn coins(State(state): State<AppState>, Path(mint): Path<String>) -> i
     }
 
     return api_ok(pump_info);
+}
+
+#[debug_handler]
+pub async fn token_accounts(State(state): State<AppState>) -> impl IntoResponse {
+    let client = state.client;
+    let wallet = state.wallet;
+
+    let token_accounts = token::token_accounts(&client, &wallet.pubkey()).await;
+
+    match token_accounts {
+        Ok(token_accounts) => api_ok(token_accounts),
+        Err(err) => {
+            warn!("get token_accounts err: {:#?}", err);
+            api_error(&err.to_string())
+        }
+    }
+}
+
+#[debug_handler]
+pub async fn token_account(
+    State(state): State<AppState>,
+    Path(mint): Path<String>,
+) -> impl IntoResponse {
+    let client = state.client;
+    let wallet = state.wallet;
+
+    let mint = if let Ok(mint) = Pubkey::from_str(mint.as_str()) {
+        mint
+    } else {
+        return api_error("invalid mint pubkey");
+    };
+
+    let token_account = token::token_account(&client, &wallet.pubkey(), mint).await;
+
+    match token_account {
+        Ok(token_account) => api_ok(token_account),
+        Err(err) => {
+            warn!("get token_account err: {:#?}", err);
+            api_error(&err.to_string())
+        }
+    }
 }

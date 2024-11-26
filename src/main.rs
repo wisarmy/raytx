@@ -188,6 +188,8 @@ async fn main() -> Result<()> {
                         .route("/swap", post(api::swap))
                         .route("/pool/:pool_id", get(api::get_pool))
                         .route("/coins/:mint", get(api::coins))
+                        .route("/token_accounts", get(api::token_accounts))
+                        .route("/token_accounts/:mint", get(api::token_account))
                         .with_state(app_state),
                 )
                 .layer(

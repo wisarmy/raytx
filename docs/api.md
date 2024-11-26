@@ -42,3 +42,44 @@ Response:
   "status": "ok"
 }
 ```
+
+# Get token accounts
+```
+curl http://127.0.0.1:7235/api/token-accounts
+```
+Response:
+```json
+{
+  "data": [
+    {
+      "amount": "0",
+      "mint": "Fof1DyVSYiQGCnT3uTbmq8kQMPdwL35x1bD82NaTs9mM",
+      "pubkey": "H3rveEcUaRwNEyaHgmo5F8Jnz1pqP7c1U8ePPHhyjdqV",
+      "ui_amount": 0
+    },
+    {
+      "amount": "0",
+      "mint": "7ijK2wWEPSUHgMRpVawWQiAiMuNnEuvV5GbEyBrTpump",
+      "pubkey": "F8qyryJjXESXcoEnw5TnVWpEpkQpvGz47oq41Mn8fuLE",
+      "ui_amount": 0
+    }
+  ],
+  "status": "ok"
+}
+```
+# Get token account
+```
+curl http://127.0.0.1:7235/api/token-accounts/Fof1DyVSYiQGCnT3uTbmq8kQMPdwL35x1bD82NaTs9mM
+```
+Response:
+```json
+{
+  "data": {
+    "amount": "0",
+    "mint": "Fof1DyVSYiQGCnT3uTbmq8kQMPdwL35x1bD82NaTs9mM",
+    "pubkey": "H3rveEcUaRwNEyaHgmo5F8Jnz1pqP7c1U8ePPHhyjdqV",
+    "ui_amount": 0
+  },
+  "status": "ok"
+}
+```
