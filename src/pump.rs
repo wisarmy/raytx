@@ -67,7 +67,7 @@ impl Pump {
         in_type: SwapInType,
         slippage: u64,
         use_jito: bool,
-    ) -> Result<()> {
+    ) -> Result<Vec<String>> {
         // slippage_bps = 50u64; // 0.5%
         let slippage_bps = slippage * 100;
         let owner = self.keypair.pubkey();

@@ -38,7 +38,7 @@ pub async fn swap(
     in_type: SwapInType,
     slippage: u64,
     use_jito: bool,
-) -> Result<()> {
+) -> Result<Vec<String>> {
     let client = state.client;
     let wallet = state.wallet;
     let client_blocking = state.client_blocking.clone();

@@ -171,7 +171,7 @@ async fn main() -> Result<()> {
                 slippage,
                 *jito,
             )
-            .await?
+            .await?;
         }
         Some(Command::Daemon { addr }) => {
             jito::init_tip_accounts().await.unwrap();

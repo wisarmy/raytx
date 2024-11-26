@@ -84,7 +84,7 @@ pub async fn wait_for_bundle_confirmation<F, Fut>(
     bundle_id: String,
     interval: Duration,
     timeout: Duration,
-) -> Result<()>
+) -> Result<Vec<String>>
 where
     F: Fn(String) -> Fut,
     Fut: Future<Output = Result<Vec<Value>>>,
@@ -117,7 +117,7 @@ where
                         .transactions
                         .iter()
                         .for_each(|tx| info!("https://solscan.io/tx/{}", tx));
-                    return Ok(());
+                    return Ok(bundle_status.transactions);
                 }
                 _ => {
                     progress_bar.set_message(format!(

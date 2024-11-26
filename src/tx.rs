@@ -25,7 +25,7 @@ pub async fn new_signed_and_send(
     keypair: &Keypair,
     mut instructions: Vec<Instruction>,
     use_jito: bool,
-) -> Result<()> {
+) -> Result<Vec<String>> {
     // If not using Jito, manually set the compute unit price and limit
     if !use_jito {
         let modify_compute_units =
@@ -57,11 +57,12 @@ pub async fn new_signed_and_send(
         }
         return match simulate_result.value.err {
             Some(err) => Err(anyhow!("{}", err)),
-            None => Ok(()),
+            None => Ok(vec![]),
         };
     }
 
     let start_time = Instant::now();
+    let mut txs = vec![];
     if use_jito {
         // jito
         let tip_account = get_tip_account().await?;
@@ -89,7 +90,7 @@ pub async fn new_signed_and_send(
         let bundle_id = jito_client.send_bundle(&bundle).await?;
         info!("bundle_id: {}", bundle_id);
 
-        wait_for_bundle_confirmation(
+        txs = wait_for_bundle_confirmation(
             move |id: String| {
                 let client = Arc::clone(&jito_client);
                 async move {
@@ -108,8 +109,9 @@ pub async fn new_signed_and_send(
     } else {
         let sig = raydium_library::common::rpc::send_txn(&client, &txn, true)?;
         info!("signature: {:?}", sig);
+        txs.push(sig.to_string());
     }
 
     info!("tx elapsed: {:?}", start_time.elapsed());
-    Ok(())
+    Ok(txs)
 }
