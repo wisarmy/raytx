@@ -42,6 +42,53 @@ Response:
   "status": "ok"
 }
 ```
+# Get coin
+```
+http://127.0.0.1:7235/api/coins/{mint}
+```
+```json
+{
+"data": {
+"associated_bonding_curve": "E82g93v8gHWULYFfhmFushJZFEG4fP7PiBgNQefioCqj",
+"bonding_curve": "4PobGYLLEs8niNg1bWNreNZgu8pDPwYH5ytgmCoxKpfC",
+"complete": true,
+"created_timestamp": 1732591590787,
+"creator": "FzfTq6vGy8vvns5J6xbnh3WeTRWHm6MwATWrYBKyRyar",
+"description": "",
+"image_uri": "https://ipfs.io/ipfs/Qmayxq68yjipGKUWMPriCXVCENFqhd8P3tyszAyAnnLuVr",
+"inverted": true,
+"is_currently_live": false,
+"king_of_the_hill_timestamp": 1732591699000,
+"last_reply": 1732593476763,
+"market_cap": 47.72,
+"market_id": "7H6Ybc7LYTzTE6MK7Ai7h9utfqArvAoMpDHBH1CueGaK",
+"metadata_uri": "https://ipfs.io/ipfs/QmP72w77xYPzoGNvYvietLVKKpjYX12uFFnpLmhdwaztfC",
+"mint": "EQitNE2QozWdyaz11eq2nVtrLqLUgwKLyXxhBwtZpump",
+"name": "Justice for Stephen Singleton",
+"nsfw": false,
+"profile_image": null,
+"raydium_info": {
+"base": 604542889.853835,
+"price": 4.78322920049418e-8,
+"quote": 28.916672037
+},
+"raydium_pool": "9XBq7pkEmhP7E7qEqEoko3hvadrNjiLJRfXS3NJdyLK8",
+"reply_count": 301,
+"show_name": true,
+"symbol": "Stephen",
+"telegram": null,
+"total_supply": 1000000000000000,
+"twitter": "https://x.com/marionawfal/status/1861249022159122444?s=46&t=f-10UPDsIV3KvlJrv0_W6A",
+"usd_market_cap": 11361.1776,
+"username": "meowster1",
+"virtual_sol_reserves": 115005359175,
+"virtual_token_reserves": 279900000000000,
+"website": null
+},
+"status": "ok"
+}
+```
+
 
 # Get token accounts
 ```

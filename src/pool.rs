@@ -44,12 +44,12 @@ impl Raydium {
         let mint_a = (
             Pubkey::from_str(&pool_info.mint_a.address)?,
             pool_info.mint_a.decimals,
-            pool_info.mint_a.name,
+            pool_info.mint_a.symbol,
         );
         let mint_b = (
             Pubkey::from_str(&pool_info.mint_b.address)?,
             pool_info.mint_b.decimals,
-            pool_info.mint_b.name,
+            pool_info.mint_b.symbol,
         );
         debug!("{mint_a:#?}, {mint_b:#?}");
 

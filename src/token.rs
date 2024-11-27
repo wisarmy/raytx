@@ -66,7 +66,7 @@ pub async fn token_account(
     token_accounts
         .first()
         .cloned()
-        .ok_or(anyhow!("no token account found"))
+        .ok_or(anyhow!("NotFound: token account not found"))
 }
 
 pub async fn token_accounts(client: &RpcClient, owner: &Pubkey) -> Result<TokenAccounts> {

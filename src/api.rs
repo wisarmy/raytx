@@ -64,7 +64,7 @@ pub async fn swap(
     )
     .await;
     match result {
-        Ok(_) => api_ok(()),
+        Ok(txs) => api_ok(txs),
         Err(err) => {
             warn!("swap err: {:#?}", err);
             api_error(&err.to_string())
