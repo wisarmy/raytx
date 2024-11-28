@@ -361,3 +361,19 @@ pub async fn is_pump_funning(mint: &str) -> Result<bool> {
         }
     }
 }
+
+pub async fn get_raydium_pool(mint: &str) -> Result<Option<String>> {
+    match get_pump_info(mint).await {
+        Ok(pump_info) => {
+            if let Some(pool) = pump_info.raydium_pool.as_str() {
+                Ok(Some(pool.to_string()))
+            } else {
+                Ok(None)
+            }
+        }
+        Err(err) => {
+            warn!("get_pump_info: {}", err);
+            Err(anyhow!("failed to get_pump_info: {}", err))
+        }
+    }
+}

@@ -31,6 +31,7 @@ pub struct Raydium {
     pub client: Arc<RpcClient>,
     pub keypair: Arc<Keypair>,
     pub client_blocking: Option<Arc<solana_client::rpc_client::RpcClient>>,
+    pub pool_id: Option<String>,
 }
 
 impl Raydium {
@@ -39,6 +40,7 @@ impl Raydium {
             client,
             keypair,
             client_blocking: None,
+            pool_id: None,
         }
     }
 
@@ -47,6 +49,11 @@ impl Raydium {
         client: Arc<solana_client::rpc_client::RpcClient>,
     ) -> &mut Self {
         self.client_blocking = Some(client);
+        self
+    }
+
+    pub fn with_pool_id(&mut self, pool_id: Option<String>) -> &mut Self {
+        self.pool_id = pool_id;
         self
     }
 
@@ -71,7 +78,15 @@ impl Raydium {
             SwapDirection::Buy => (native_mint, mint),
             SwapDirection::Sell => (mint, native_mint),
         };
-        let pool_info = get_pool_info(&token_in.to_string(), &token_out.to_string()).await?;
+        let pool_data = match self.pool_id.clone() {
+            Some(pool_id) => get_pool_info_by_id(&pool_id).await?,
+            None => {
+                get_pool_info(&token_in.to_string(), &token_out.to_string())
+                    .await?
+                    .data
+            }
+        };
+        let pool_info = pool_data.get_pool().ok_or(anyhow!("failed to get pool"))?;
 
         let in_ata = token::get_associated_token_address(
             self.client.clone(),
@@ -172,16 +187,8 @@ impl Raydium {
 
         let amm_program = Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8")?;
         let market_program = Pubkey::from_str("srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX")?;
-        let market_id = Pubkey::from_str(
-            &pool_info
-                .get_market_id()
-                .with_context(|| "failed to get pool market id")?,
-        )?;
-        let amm_pool_id = Pubkey::from_str(
-            &pool_info
-                .get_pool_id()
-                .with_context(|| "failed to get pool id")?,
-        )?;
+        let market_id = Pubkey::from_str(&pool_info.market_id)?;
+        let amm_pool_id = Pubkey::from_str(&pool_info.id)?;
         debug!("amm pool id: {amm_pool_id}");
         let client = get_rpc_client_blocking()?;
 
@@ -221,13 +228,7 @@ impl Raydium {
             SwapDirection::Sell => (amm::utils::SwapDirection::Coin2PC, "Coin2PC"),
         };
         // if mint_a is native mint, reverse direction
-        if pool_info
-            .get_pool()
-            .ok_or(anyhow!("failed to get pool"))?
-            .mint_a
-            .address
-            == native_mint.to_string()
-        {
+        if pool_info.mint_a.address == native_mint.to_string() {
             (direction, direction_str) = match direction {
                 amm::utils::SwapDirection::PC2Coin => {
                     (amm::utils::SwapDirection::Coin2PC, "Coin2PC")
@@ -402,26 +403,6 @@ pub async fn get_pool_info_by_id(pool_id: &str) -> Result<PoolData> {
         .await
         .context("Failed to parse pool info JSON")?;
     Ok(result)
-}
-
-impl PoolInfo {
-    pub fn get_pool_id(&self) -> Option<String> {
-        if let Some(pool) = self.data.get_pool() {
-            Some(pool.id.clone())
-        } else {
-            None
-        }
-    }
-    pub fn get_market_id(&self) -> Option<String> {
-        if let Some(pool) = self.data.get_pool() {
-            Some(pool.market_id.clone())
-        } else {
-            None
-        }
-    }
-    pub fn get_pool(&self) -> Option<Pool> {
-        self.data.get_pool()
-    }
 }
 
 #[derive(Debug, Deserialize)]

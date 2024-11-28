@@ -230,7 +230,7 @@ async fn main() -> Result<()> {
                     &token_account.mint,
                 )
                 .await?;
-                let pool_id = pool_info.get_pool_id().unwrap();
+                let pool_id = pool_info.data.get_pool().unwrap().id;
                 info!("pool id: {}", pool_id);
             }
         },

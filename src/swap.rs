@@ -1,9 +1,13 @@
 use anyhow::Result;
 use clap::ValueEnum;
 use serde::Deserialize;
-use tracing::info;
+use tracing::{info, warn};
 
-use crate::{api::AppState, pump, raydium};
+use crate::{
+    api::AppState,
+    pump::{self, get_pump_info},
+    raydium,
+};
 
 #[derive(ValueEnum, Debug, Clone, Deserialize)]
 pub enum SwapDirection {
@@ -42,8 +46,25 @@ pub async fn swap(
     let client = state.client;
     let wallet = state.wallet;
     let client_blocking = state.client_blocking.clone();
+    let mut swap_in_pump = true;
 
-    if pump::is_pump_funning(mint).await? {
+    let raydium_pool = match get_pump_info(mint).await {
+        Ok(pump_info) => {
+            if let Some(pool) = pump_info.raydium_pool.as_str() {
+                swap_in_pump = false;
+                Some(pool.to_string())
+            } else {
+                None
+            }
+        }
+        Err(err) => {
+            warn!("failed to get_pump_info: {}", err);
+            swap_in_pump = false;
+            None
+        }
+    };
+
+    if swap_in_pump {
         info!("swap in pump fun");
         let mut swapx = pump::Pump::new(client, wallet);
         swapx.with_blocking_client(client_blocking);
@@ -54,6 +75,7 @@ pub async fn swap(
         info!("swap in raydium");
         let mut swapx = raydium::Raydium::new(client, wallet);
         swapx.with_blocking_client(client_blocking);
+        swapx.with_pool_id(raydium_pool);
         swapx
             .swap(mint, amount_in, swap_direction, in_type, slippage, use_jito)
             .await
