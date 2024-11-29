@@ -1,12 +1,17 @@
 use std::env;
 
+use amm_cli::AmmSwapInfoResult;
 use anyhow::{anyhow, Context, Result};
-use raydium_library::amm;
+use raydium_amm::state::{AmmInfo, Loadable};
 use reqwest::Proxy;
 use serde::Deserialize;
-use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_client::{
+    nonblocking::rpc_client::RpcClient,
+    rpc_filter::{Memcmp, RpcFilterType},
+};
 use solana_sdk::{
     // native_token::LAMPORTS_PER_SOL,
+    instruction::Instruction,
     program_pack::Pack,
     pubkey::Pubkey,
     signature::Keypair,
@@ -26,6 +31,8 @@ use crate::{
 use spl_token::state::Account;
 
 use tracing::{debug, error, info};
+
+pub const AMM_PROGRAM: &str = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
 
 pub struct Raydium {
     pub client: Arc<RpcClient>,
@@ -59,7 +66,7 @@ impl Raydium {
 
     pub async fn swap(
         &self,
-        mint: &str,
+        mint_str: &str,
         amount_in: f64,
         swap_direction: SwapDirection,
         in_type: SwapInType,
@@ -69,24 +76,30 @@ impl Raydium {
         // slippage_bps = 50u64; // 0.5%
         let slippage_bps = slippage * 100;
         let owner = self.keypair.pubkey();
-        let mint =
-            Pubkey::from_str(mint).map_err(|e| anyhow!("failed to parse mint pubkey: {}", e))?;
+        let mint = Pubkey::from_str(mint_str)
+            .map_err(|e| anyhow!("failed to parse mint pubkey: {}", e))?;
         let program_id = spl_token::ID;
         let native_mint = spl_token::native_mint::ID;
 
-        let (token_in, token_out) = match swap_direction {
-            SwapDirection::Buy => (native_mint, mint),
-            SwapDirection::Sell => (mint, native_mint),
+        let (amm_pool_id, pool_state) = get_pool_state(
+            self.client_blocking.clone().unwrap(),
+            self.pool_id.as_deref(),
+            Some(mint_str),
+        )
+        .await?;
+        // debug!("pool_state: {:#?}", pool_state);
+
+        let (token_in, token_out, user_input_token, swap_base_in) = match (
+            swap_direction.clone(),
+            pool_state.coin_vault_mint == native_mint,
+        ) {
+            (SwapDirection::Buy, true) => (native_mint, mint, pool_state.coin_vault, true),
+            (SwapDirection::Buy, false) => (native_mint, mint, pool_state.pc_vault, true),
+            (SwapDirection::Sell, true) => (mint, native_mint, pool_state.pc_vault, true),
+            (SwapDirection::Sell, false) => (mint, native_mint, pool_state.coin_vault, true),
         };
-        let pool_data = match self.pool_id.clone() {
-            Some(pool_id) => get_pool_info_by_id(&pool_id).await?,
-            None => {
-                get_pool_info(&token_in.to_string(), &token_out.to_string())
-                    .await?
-                    .data
-            }
-        };
-        let pool_info = pool_data.get_pool().ok_or(anyhow!("failed to get pool"))?;
+
+        debug!("token_in:{token_in}, token_out:{token_out}, user_input_token:{user_input_token}, swap_base_in:{swap_base_in}");
 
         let in_ata = token::get_associated_token_address(
             self.client.clone(),
@@ -103,7 +116,6 @@ impl Raydium {
 
         let mut create_instruction = None;
         let mut close_instruction = None;
-        let swap_base_in = true;
 
         let (amount_specified, amount_ui_pretty) = match swap_direction {
             SwapDirection::Buy => {
@@ -185,75 +197,26 @@ impl Raydium {
             }
         };
 
-        let amm_program = Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8")?;
-        let market_program = Pubkey::from_str("srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX")?;
-        let market_id = Pubkey::from_str(&pool_info.market_id)?;
-        let amm_pool_id = Pubkey::from_str(&pool_info.id)?;
+        let amm_program = Pubkey::from_str(AMM_PROGRAM)?;
         debug!("amm pool id: {amm_pool_id}");
         let client = get_rpc_client_blocking()?;
+        let swap_info_result = amm_cli::calculate_swap_info(
+            &client,
+            amm_program,
+            amm_pool_id,
+            user_input_token,
+            amount_specified,
+            slippage_bps,
+            swap_base_in,
+        )?;
+        let other_amount_threshold = swap_info_result.other_amount_threshold;
 
-        // load amm keys
-        // since load_amm_keys is not available, get_amm_pda_keys is used here,
-        // and the parameters(coin_mint, pc_mint) look a little strange.
-        let amm_keys = raydium_library::amm::utils::get_amm_pda_keys(
-            &amm_program,
-            &market_program,
-            &market_id,
-            &mint,
-            &native_mint,
-        )?;
-        debug!("amm_keys: {amm_keys:#?}");
-        // load market keys
-        let market_keys = raydium_library::amm::openbook::get_keys_for_market(
-            &client,
-            &amm_keys.market_program,
-            &amm_keys.market,
-        )
-        .inspect_err(|e| {
-            error!("failed to get market_keys: {}", e);
-        })?;
-        // calculate amm pool vault with load data at the same time or use simulate to calculate
-        let result = raydium_library::amm::calculate_pool_vault_amounts(
-            &client,
-            &amm_program,
-            &amm_pool_id,
-            &amm_keys,
-            &market_keys,
-            raydium_library::amm::utils::CalculateMethod::Simulate(owner),
-        )?;
-        debug!("calculate_pool result: {:#?}", result);
-        // setting direction
-        let (mut direction, mut direction_str) = match swap_direction {
-            SwapDirection::Buy => (amm::utils::SwapDirection::PC2Coin, "PC2Coin"),
-            SwapDirection::Sell => (amm::utils::SwapDirection::Coin2PC, "Coin2PC"),
-        };
-        // if mint_a is native mint, reverse direction
-        if pool_info.mint_a.address == native_mint.to_string() {
-            (direction, direction_str) = match direction {
-                amm::utils::SwapDirection::PC2Coin => {
-                    (amm::utils::SwapDirection::Coin2PC, "Coin2PC")
-                }
-                amm::utils::SwapDirection::Coin2PC => {
-                    (amm::utils::SwapDirection::PC2Coin, "PC2Coin")
-                }
-            };
-        }
-        debug!("direction: {}", direction_str);
+        info!("swap_info_result: {:#?}", swap_info_result);
 
         info!(
             "swap: {}, value: {:?} -> {}",
             token_in, amount_ui_pretty, token_out
         );
-        let other_amount_threshold = raydium_library::amm::swap_with_slippage(
-            result.pool_pc_vault_amount,
-            result.pool_coin_vault_amount,
-            result.swap_fee_numerator,
-            result.swap_fee_denominator,
-            direction,
-            amount_specified,
-            swap_base_in,
-            slippage_bps,
-        )?;
         // build instructions
         let mut instructions = vec![];
         // sol <-> wsol support
@@ -324,10 +287,9 @@ impl Raydium {
             }
 
             // build swap instruction
-            let build_swap_instruction = raydium_library::amm::swap(
+            let build_swap_instruction = amm_swap(
                 &amm_program,
-                &amm_keys,
-                &market_keys,
+                swap_info_result,
                 &owner,
                 &final_in_ata,
                 &final_out_ata,
@@ -356,9 +318,142 @@ impl Raydium {
     }
 }
 
+pub fn amm_swap(
+    amm_program: &Pubkey,
+    result: AmmSwapInfoResult,
+    user_owner: &Pubkey,
+    user_source: &Pubkey,
+    user_destination: &Pubkey,
+    amount_specified: u64,
+    other_amount_threshold: u64,
+    swap_base_in: bool,
+) -> Result<Instruction> {
+    let swap_instruction = if swap_base_in {
+        raydium_amm::instruction::swap_base_in(
+            &amm_program,
+            &result.pool_id,
+            &result.amm_authority,
+            &result.amm_open_orders,
+            &result.amm_coin_vault,
+            &result.amm_pc_vault,
+            &result.market_program,
+            &result.market,
+            &result.market_bids,
+            &result.market_asks,
+            &result.market_event_queue,
+            &result.market_coin_vault,
+            &result.market_pc_vault,
+            &result.market_vault_signer,
+            user_source,
+            user_destination,
+            user_owner,
+            amount_specified,
+            other_amount_threshold,
+        )?
+    } else {
+        raydium_amm::instruction::swap_base_out(
+            &amm_program,
+            &result.pool_id,
+            &result.amm_authority,
+            &result.amm_open_orders,
+            &result.amm_coin_vault,
+            &result.amm_pc_vault,
+            &result.market_program,
+            &result.market,
+            &result.market_bids,
+            &result.market_asks,
+            &result.market_event_queue,
+            &result.market_coin_vault,
+            &result.market_pc_vault,
+            &result.market_vault_signer,
+            user_source,
+            user_destination,
+            user_owner,
+            other_amount_threshold,
+            amount_specified,
+        )?
+    };
+
+    Ok(swap_instruction)
+}
+
+pub async fn get_pool_state(
+    rpc_client: Arc<solana_client::rpc_client::RpcClient>,
+    pool_id: Option<&str>,
+    mint: Option<&str>,
+) -> Result<(Pubkey, AmmInfo)> {
+    if let Some(pool_id) = pool_id {
+        debug!("finding pool state by pool_id: {}", pool_id);
+        let amm_pool_id = Pubkey::from_str(pool_id)?;
+        let pool_state =
+            common::rpc::get_account::<raydium_amm::state::AmmInfo>(&rpc_client, &amm_pool_id)?
+                .ok_or(anyhow!("NotFoundPool: pool state not found"))?;
+        Ok((amm_pool_id, pool_state))
+    } else {
+        if let Some(mint) = mint {
+            let pool_data = get_pool_info(&spl_token::native_mint::ID.to_string(), mint).await;
+            if let Ok(pool_data) = pool_data {
+                let pool = pool_data
+                    .get_pool()
+                    .ok_or(anyhow!("NotFoundPool: pool not found in raydium api"))?;
+                let amm_pool_id = Pubkey::from_str(&pool.id)?;
+                debug!("finding pool state by raydium api: {}", amm_pool_id);
+                let pool_state = common::rpc::get_account::<raydium_amm::state::AmmInfo>(
+                    &rpc_client,
+                    &amm_pool_id,
+                )?
+                .ok_or(anyhow!("NotFoundPool: pool state not found"))?;
+                return Ok((amm_pool_id, pool_state));
+            } else {
+                get_pool_state_by_mint(rpc_client, mint).await
+            }
+        } else {
+            Err(anyhow!("NotFoundPool: pool state not found"))
+        }
+    }
+}
+
+pub async fn get_pool_state_by_mint(
+    rpc_client: Arc<solana_client::rpc_client::RpcClient>,
+    mint: &str,
+) -> Result<(Pubkey, AmmInfo)> {
+    debug!("finding pool state by mint: {}", mint);
+    let pc_mint = Some(spl_token::native_mint::ID);
+    let coin_mint = Pubkey::from_str(mint).ok();
+    // fetch pool by filters
+    let pool_len = core::mem::size_of::<raydium_amm::state::AmmInfo>() as u64;
+    let filters = match (coin_mint, pc_mint) {
+        (None, None) => Some(vec![RpcFilterType::DataSize(pool_len)]),
+        (Some(coin_mint), None) => Some(vec![
+            RpcFilterType::Memcmp(Memcmp::new_base58_encoded(400, &coin_mint.to_bytes())),
+            RpcFilterType::DataSize(pool_len),
+        ]),
+        (None, Some(pc_mint)) => Some(vec![
+            RpcFilterType::Memcmp(Memcmp::new_base58_encoded(432, &pc_mint.to_bytes())),
+            RpcFilterType::DataSize(pool_len),
+        ]),
+        (Some(coin_mint), Some(pc_mint)) => Some(vec![
+            RpcFilterType::Memcmp(Memcmp::new_base58_encoded(400, &coin_mint.to_bytes())),
+            RpcFilterType::Memcmp(Memcmp::new_base58_encoded(432, &pc_mint.to_bytes())),
+            RpcFilterType::DataSize(pool_len),
+        ]),
+    };
+    let amm_program = Pubkey::from_str(AMM_PROGRAM)?;
+    let pools =
+        common::rpc::get_program_accounts_with_filters(&rpc_client, amm_program, filters).unwrap();
+
+    if pools.len() > 1 {
+        let pool = &pools[0];
+        let pool_state = raydium_amm::state::AmmInfo::load_from_bytes(&pools[0].1.data)?;
+        Ok((pool.0, pool_state.clone()))
+    } else {
+        return Err(anyhow!("NotFoundPool: pool state not found"));
+    }
+}
+
 // get pool info
 // https://api-v3.raydium.io/pools/info/mint?mint1=So11111111111111111111111111111111111111112&mint2=EzM2d8JVpzfhV7km3tUsR1U1S4xwkrPnWkM4QFeTpump&poolType=standard&poolSortField=default&sortType=desc&pageSize=10&page=1
-pub async fn get_pool_info(mint1: &str, mint2: &str) -> Result<PoolInfo> {
+pub async fn get_pool_info(mint1: &str, mint2: &str) -> Result<PoolData> {
     let mut client_builder = reqwest::Client::builder();
     if let Ok(http_proxy) = env::var("HTTP_PROXY") {
         let proxy = Proxy::all(http_proxy)?;
@@ -382,7 +477,7 @@ pub async fn get_pool_info(mint1: &str, mint2: &str) -> Result<PoolInfo> {
         .json::<PoolInfo>()
         .await
         .context("Failed to parse pool info JSON")?;
-    Ok(result)
+    Ok(result.data)
 }
 // get pool info by ids
 // https://api-v3.raydium.io/pools/info/ids?ids=3RHg85W1JtKeqFQSxBfd2RX13aBFvvy6gcATkHU657mL

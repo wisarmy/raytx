@@ -2,7 +2,6 @@ use std::{str::FromStr, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use raydium_amm::math::U128;
-use raydium_library::amm::TEN_THOUSAND;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -24,7 +23,7 @@ use crate::{
     swap::{SwapDirection, SwapInType},
     token, tx,
 };
-
+pub const TEN_THOUSAND: u64 = 10000;
 pub const TOKEN_PROGRAM: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 pub const RENT_PROGRAM: &str = "SysvarRent111111111111111111111111111111111";
 pub const ASSOCIATED_TOKEN_PROGRAM: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";

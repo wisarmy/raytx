@@ -107,7 +107,7 @@ pub async fn new_signed_and_send(
         )
         .await?;
     } else {
-        let sig = raydium_library::common::rpc::send_txn(&client, &txn, true)?;
+        let sig = common::rpc::send_txn(&client, &txn, true)?;
         info!("signature: {:?}", sig);
         txs.push(sig.to_string());
     }
