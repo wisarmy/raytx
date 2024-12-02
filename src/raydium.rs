@@ -391,6 +391,11 @@ pub async fn get_pool_state(
         Ok((amm_pool_id, pool_state))
     } else {
         if let Some(mint) = mint {
+            // find pool by mint via rpc
+            if let Ok(pool_state) = get_pool_state_by_mint(rpc_client.clone(), mint).await {
+                return Ok(pool_state);
+            }
+            // find pool by mint via raydium api
             let pool_data = get_pool_info(&spl_token::native_mint::ID.to_string(), mint).await;
             if let Ok(pool_data) = pool_data {
                 let pool = pool_data
@@ -404,9 +409,8 @@ pub async fn get_pool_state(
                 )?
                 .ok_or(anyhow!("NotFoundPool: pool state not found"))?;
                 return Ok((amm_pool_id, pool_state));
-            } else {
-                get_pool_state_by_mint(rpc_client, mint).await
             }
+            Err(anyhow!("NotFoundPool: pool state not found"))
         } else {
             Err(anyhow!("NotFoundPool: pool state not found"))
         }

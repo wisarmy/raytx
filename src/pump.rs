@@ -1,9 +1,10 @@
 use std::{str::FromStr, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
+use borsh::from_slice;
+use borsh_derive::{BorshDeserialize, BorshSerialize};
 use raydium_amm::math::U128;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
@@ -12,14 +13,15 @@ use solana_sdk::{
     signer::Signer,
     system_program,
 };
-use spl_associated_token_account::instruction::create_associated_token_account;
+use spl_associated_token_account::{
+    get_associated_token_address, instruction::create_associated_token_account,
+};
 use spl_token::{amount_to_ui_amount, ui_amount_to_amount};
 use spl_token_client::token::TokenError;
 
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    get_client_build,
     swap::{SwapDirection, SwapInType},
     token, tx,
 };
@@ -79,8 +81,11 @@ impl Pump {
             SwapDirection::Buy => (native_mint, mint, PUMP_BUY_METHOD),
             SwapDirection::Sell => (mint, native_mint, PUMP_SELL_METHOD),
         };
+        let pump_program = Pubkey::from_str(PUMP_PROGRAM)?;
+        let (bonding_curve, associated_bonding_curve, bonding_curve_account) =
+            get_bonding_curve_account(self.client_blocking.clone().unwrap(), &mint, &program_id)
+                .await?;
 
-        let pump_info = get_pump_info(&mint.to_string()).await?;
         let in_ata = token::get_associated_token_address(
             self.client.clone(),
             self.keypair.clone(),
@@ -180,17 +185,11 @@ impl Pump {
             .clone()
             .context("failed to get rpc client")?;
 
-        let bonding_curve = Pubkey::from_str(&pump_info.bonding_curve)
-            .map_err(|e| anyhow!("failed to parse associated_bonding_curve pubkey: {}", e))?;
-        let associated_bonding_curve = Pubkey::from_str(&pump_info.associated_bonding_curve)
-            .map_err(|e| anyhow!("failed to parse associated_bonding_curve pubkey: {}", e))?;
-        let pump_program = Pubkey::from_str(PUMP_PROGRAM)?;
-
         // Calculate tokens out
-        let virtual_sol_reserves = U128::from(pump_info.virtual_sol_reserves);
-        let virtual_token_reserves = U128::from(pump_info.virtual_token_reserves);
-        let unit_price = (pump_info.virtual_sol_reserves as f64
-            / pump_info.virtual_token_reserves as f64)
+        let virtual_sol_reserves = U128::from(bonding_curve_account.virtual_sol_reserves);
+        let virtual_token_reserves = U128::from(bonding_curve_account.virtual_token_reserves);
+        let unit_price = (bonding_curve_account.virtual_sol_reserves as f64
+            / bonding_curve_account.virtual_token_reserves as f64)
             / 1000.0;
 
         let (token_amount, sol_amount_threshold, input_accouts) = match swap_direction {
@@ -306,73 +305,84 @@ pub struct RaydiumInfo {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PumpInfo {
     pub mint: String,
-    pub name: String,
-    pub symbol: String,
-    pub description: Value,
-    pub image_uri: Value,
-    pub metadata_uri: Value,
-    pub twitter: Value,
-    pub telegram: Value,
     pub bonding_curve: String,
     pub associated_bonding_curve: String,
-    pub creator: String,
-    pub created_timestamp: u64,
-    pub raydium_pool: Value,
+    pub raydium_pool: Option<String>,
     pub raydium_info: Option<RaydiumInfo>,
     pub complete: bool,
     pub virtual_sol_reserves: u64,
     pub virtual_token_reserves: u64,
     pub total_supply: u64,
-    pub website: Value,
-    pub show_name: bool,
-    pub king_of_the_hill_timestamp: Value,
-    pub market_cap: f64,
-    pub reply_count: u64,
-    pub last_reply: Value,
-    pub nsfw: bool,
-    pub market_id: Value,
-    pub inverted: Value,
-    pub is_currently_live: bool,
-    pub username: Value,
-    pub profile_image: Value,
-    pub usd_market_cap: f64,
+}
+
+#[derive(Debug, BorshSerialize, BorshDeserialize)]
+pub struct BondingCurveAccount {
+    pub discriminator: u64,
+    pub virtual_token_reserves: u64,
+    pub virtual_sol_reserves: u64,
+    pub real_token_reserves: u64,
+    pub real_sol_reserves: u64,
+    pub token_total_supply: u64,
+    pub complete: bool,
+}
+
+pub async fn get_bonding_curve_account(
+    rpc_client: Arc<solana_client::rpc_client::RpcClient>,
+    mint: &Pubkey,
+    program_id: &Pubkey,
+) -> Result<(Pubkey, Pubkey, BondingCurveAccount)> {
+    let bonding_curve = get_pda(mint, program_id)?;
+    let associated_bonding_curve = get_associated_token_address(&bonding_curve, &mint);
+    let bonding_curve_data = rpc_client
+        .get_account_data(&bonding_curve)
+        .inspect_err(|err| {
+            warn!(
+                "Failed to get bonding curve account data: {}, err: {}",
+                bonding_curve, err
+            );
+        })?;
+
+    let bonding_curve_account =
+        from_slice::<BondingCurveAccount>(&bonding_curve_data).map_err(|e| {
+            anyhow!(
+                "Failed to deserialize bonding curve account: {}",
+                e.to_string()
+            )
+        })?;
+
+    Ok((
+        bonding_curve,
+        associated_bonding_curve,
+        bonding_curve_account,
+    ))
+}
+
+pub fn get_pda(mint: &Pubkey, program_id: &Pubkey) -> Result<Pubkey> {
+    let seeds = [b"bonding-curve".as_ref(), mint.as_ref()];
+    let (bonding_curve, _bump) = Pubkey::find_program_address(&seeds, program_id);
+    Ok(bonding_curve)
 }
 
 // https://frontend-api.pump.fun/coins/8zSLdDzM1XsqnfrHmHvA9ir6pvYDjs8UXz6B2Tydd6b2
-pub async fn get_pump_info(mint: &str) -> Result<PumpInfo> {
-    let client = get_client_build()?;
-    let result = client
-        .get(format!("https://frontend-api.pump.fun/coins/{}", mint))
-        .send()
-        .await?
-        .json::<PumpInfo>()
-        .await
-        .context("Failed to parse pump info JSON")?;
-    Ok(result)
-}
+pub async fn get_pump_info(
+    rpc_client: Arc<solana_client::rpc_client::RpcClient>,
+    mint: &str,
+) -> Result<PumpInfo> {
+    let mint = Pubkey::from_str(mint)?;
+    let program_id = Pubkey::from_str(PUMP_PROGRAM)?;
+    let (bonding_curve, associated_bonding_curve, bonding_curve_account) =
+        get_bonding_curve_account(rpc_client, &mint, &program_id).await?;
 
-pub async fn is_pump_funning(mint: &str) -> Result<bool> {
-    match get_pump_info(mint).await {
-        Ok(pump_info) => Ok(pump_info.raydium_pool.is_null()),
-        Err(err) => {
-            warn!("is_pump_funning: {}", err);
-            Ok(false)
-        }
-    }
-}
-
-pub async fn get_raydium_pool(mint: &str) -> Result<Option<String>> {
-    match get_pump_info(mint).await {
-        Ok(pump_info) => {
-            if let Some(pool) = pump_info.raydium_pool.as_str() {
-                Ok(Some(pool.to_string()))
-            } else {
-                Ok(None)
-            }
-        }
-        Err(err) => {
-            warn!("get_pump_info: {}", err);
-            Err(anyhow!("failed to get_pump_info: {}", err))
-        }
-    }
+    let pump_info = PumpInfo {
+        mint: mint.to_string(),
+        bonding_curve: bonding_curve.to_string(),
+        associated_bonding_curve: associated_bonding_curve.to_string(),
+        raydium_pool: None,
+        raydium_info: None,
+        complete: bonding_curve_account.complete,
+        virtual_sol_reserves: bonding_curve_account.virtual_sol_reserves,
+        virtual_token_reserves: bonding_curve_account.virtual_token_reserves,
+        total_supply: bonding_curve_account.token_total_supply,
+    };
+    Ok(pump_info)
 }

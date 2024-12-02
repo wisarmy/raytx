@@ -98,19 +98,20 @@ pub async fn get_pool(
 
 pub async fn coins(State(state): State<AppState>, Path(mint): Path<String>) -> impl IntoResponse {
     let client = state.client;
+    let client_blocking = state.client_blocking;
     let wallet = state.wallet;
     // query from pump.fun
-    let mut pump_info = match get_pump_info(&mint).await {
+    let mut pump_info = match get_pump_info(client_blocking.clone(), &mint).await {
         Ok(info) => info,
         Err(err) => {
             return api_error(&err.to_string());
         }
     };
-    if pump_info.raydium_pool.is_string() {
-        let pool_id = pump_info.raydium_pool.as_str().unwrap();
+    if pump_info.raydium_pool.is_some() {
+        let pool_id = pump_info.raydium_pool.clone().unwrap();
         let mut swapx = Raydium::new(client, wallet);
-        swapx.with_blocking_client(state.client_blocking);
-        match swapx.get_pool_price(pool_id).await {
+        swapx.with_blocking_client(client_blocking);
+        match swapx.get_pool_price(&pool_id).await {
             Ok(data) => {
                 pump_info.raydium_info = Some(RaydiumInfo {
                     base: data.0,

@@ -41,6 +41,8 @@ rand = "0.8.5"
 indicatif = "0.17.8"
 axum = { version = "0.7.5", features = ["macros"] }
 tower-http = { version = "0.5.2", features = ["cors"] }
+borsh = { version = "1.5.3"}
+borsh-derive = "1.5.3"
 
 [dev-dependencies]
 ctor = "0.2.8"

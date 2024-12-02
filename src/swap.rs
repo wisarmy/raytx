@@ -44,25 +44,18 @@ pub async fn swap(
     use_jito: bool,
 ) -> Result<Vec<String>> {
     let client = state.client;
+    let client_blocking = state.client_blocking;
     let wallet = state.wallet;
-    let client_blocking = state.client_blocking.clone();
-    let mut swap_in_pump = true;
 
-    let raydium_pool = match get_pump_info(mint).await {
-        Ok(pump_info) => {
-            if let Some(pool) = pump_info.raydium_pool.as_str() {
-                swap_in_pump = false;
-                Some(pool.to_string())
-            } else {
-                None
-            }
-        }
-        Err(err) => {
-            warn!("failed to get_pump_info: {}", err);
-            swap_in_pump = false;
-            None
-        }
-    };
+    let swap_in_pump = get_pump_info(client_blocking.clone(), mint)
+        .await
+        .map_or_else(
+            |err| {
+                warn!("failed to get_pump_info: {}", err);
+                false
+            },
+            |pump_info| !pump_info.complete,
+        );
 
     if swap_in_pump {
         info!("swap in pump fun");
@@ -75,7 +68,6 @@ pub async fn swap(
         info!("swap in raydium");
         let mut swapx = raydium::Raydium::new(client, wallet);
         swapx.with_blocking_client(client_blocking);
-        swapx.with_pool_id(raydium_pool);
         swapx
             .swap(mint, amount_in, swap_direction, in_type, slippage, use_jito)
             .await
