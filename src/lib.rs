@@ -1,9 +1,11 @@
 use std::{env, sync::Arc};
 
 use anyhow::{anyhow, Result};
+use rand::seq::SliceRandom;
 use reqwest::Proxy;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::signature::Keypair;
+use tracing::debug;
 
 pub mod api;
 pub mod constants;
@@ -35,15 +37,29 @@ pub fn get_client_build() -> Result<reqwest::Client> {
     }
 }
 
+pub fn get_random_rpc_url() -> Result<String> {
+    let cluster_urls = env::var("RPC_ENDPOINTS")?
+        .split(",")
+        .map(|s| s.trim().to_string())
+        .collect::<Vec<String>>();
+    let random_url = cluster_urls
+        .choose(&mut rand::thread_rng())
+        .expect("No RPC endpoints configured")
+        .clone();
+
+    debug!("Choose rpc: {}", random_url);
+    return Ok(random_url);
+}
+
 pub fn get_rpc_client() -> Result<Arc<RpcClient>> {
-    let cluster_url = env::var("RPC_ENDPOINT")?;
-    let client = RpcClient::new(cluster_url.to_string());
+    let random_url = get_random_rpc_url()?;
+    let client = RpcClient::new(random_url);
     return Ok(Arc::new(client));
 }
 
 pub fn get_rpc_client_blocking() -> Result<Arc<solana_client::rpc_client::RpcClient>> {
-    let cluster_url = env::var("RPC_ENDPOINT")?;
-    let client = solana_client::rpc_client::RpcClient::new(cluster_url.to_string());
+    let random_url = get_random_rpc_url()?;
+    let client = solana_client::rpc_client::RpcClient::new(random_url);
     return Ok(Arc::new(client));
 }
 

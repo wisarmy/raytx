@@ -13,6 +13,7 @@ use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer};
 use tracing::{info, warn};
 
 use crate::{
+    get_rpc_client, get_rpc_client_blocking,
     helper::{api_error, api_ok},
     pump::{get_pump_info, RaydiumInfo},
     raydium::Raydium,
@@ -77,10 +78,21 @@ pub async fn get_pool(
     State(state): State<AppState>,
     Path(pool_id): Path<String>,
 ) -> impl IntoResponse {
-    let client = state.client;
+    let client = match get_rpc_client() {
+        Ok(client) => client,
+        Err(err) => {
+            return api_error(&format!("failed to get rpc client: {err}"));
+        }
+    };
+    let client_blocking = match get_rpc_client_blocking() {
+        Ok(client) => client,
+        Err(err) => {
+            return api_error(&format!("failed to get rpc client: {err}"));
+        }
+    };
     let wallet = state.wallet;
     let mut swapx = Raydium::new(client, wallet);
-    swapx.with_blocking_client(state.client_blocking);
+    swapx.with_blocking_client(client_blocking);
     match swapx.get_pool(pool_id.as_str()).await {
         Ok(data) => api_ok(json!({
             "base": data.0,
@@ -97,8 +109,18 @@ pub async fn get_pool(
 }
 
 pub async fn coins(State(state): State<AppState>, Path(mint): Path<String>) -> impl IntoResponse {
-    let client = state.client;
-    let client_blocking = state.client_blocking;
+    let client = match get_rpc_client() {
+        Ok(client) => client,
+        Err(err) => {
+            return api_error(&format!("failed to get rpc client: {err}"));
+        }
+    };
+    let client_blocking = match get_rpc_client_blocking() {
+        Ok(client) => client,
+        Err(err) => {
+            return api_error(&format!("failed to get rpc client: {err}"));
+        }
+    };
     let wallet = state.wallet;
     // query from pump.fun
     let mut pump_info = match get_pump_info(client_blocking.clone(), &mint).await {
@@ -130,7 +152,12 @@ pub async fn coins(State(state): State<AppState>, Path(mint): Path<String>) -> i
 
 #[debug_handler]
 pub async fn token_accounts(State(state): State<AppState>) -> impl IntoResponse {
-    let client = state.client;
+    let client = match get_rpc_client() {
+        Ok(client) => client,
+        Err(err) => {
+            return api_error(&format!("failed to get rpc client: {err}"));
+        }
+    };
     let wallet = state.wallet;
 
     let token_accounts = token::token_accounts(&client, &wallet.pubkey()).await;
@@ -149,7 +176,12 @@ pub async fn token_account(
     State(state): State<AppState>,
     Path(mint): Path<String>,
 ) -> impl IntoResponse {
-    let client = state.client;
+    let client = match get_rpc_client() {
+        Ok(client) => client,
+        Err(err) => {
+            return api_error(&format!("failed to get rpc client: {err}"));
+        }
+    };
     let wallet = state.wallet;
 
     let mint = if let Ok(mint) = Pubkey::from_str(mint.as_str()) {

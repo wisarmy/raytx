@@ -83,7 +83,7 @@ impl Pump {
         };
         let pump_program = Pubkey::from_str(PUMP_PROGRAM)?;
         let (bonding_curve, associated_bonding_curve, bonding_curve_account) =
-            get_bonding_curve_account(self.client_blocking.clone().unwrap(), &mint, &program_id)
+            get_bonding_curve_account(self.client_blocking.clone().unwrap(), &mint, &pump_program)
                 .await?;
 
         let in_ata = token::get_associated_token_address(

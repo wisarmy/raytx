@@ -5,6 +5,7 @@ use tracing::{info, warn};
 
 use crate::{
     api::AppState,
+    get_rpc_client, get_rpc_client_blocking,
     pump::{self, get_pump_info},
     raydium,
 };
@@ -43,8 +44,8 @@ pub async fn swap(
     slippage: u64,
     use_jito: bool,
 ) -> Result<Vec<String>> {
-    let client = state.client;
-    let client_blocking = state.client_blocking;
+    let client = get_rpc_client()?;
+    let client_blocking = get_rpc_client_blocking()?;
     let wallet = state.wallet;
 
     let swap_in_pump = get_pump_info(client_blocking.clone(), mint)
