@@ -4,7 +4,7 @@ use amm_cli::load_amm_keys;
 use anyhow::{Context, Result};
 use common::common_utils;
 use futures_util::{SinkExt, StreamExt};
-use raytx::{get_rpc_client_blocking, logger, pump::PUMP_PROGRAM};
+use raytx::{get_rpc_client_blocking, logger, pump::PUMP_PROGRAM, raydium::get_pool_state_by_mint};
 use solana_client::rpc_client::GetConfirmedSignaturesForAddress2Config;
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
@@ -16,14 +16,26 @@ async fn main() -> Result<()> {
 
     // get_signatures().await?;
     // connect_websocket().await?;
-    get_amm_info().await?;
+    // get_amm_info().await?;
+    get_amm_info_by_mint().await?;
+    Ok(())
+}
+
+pub async fn get_amm_info_by_mint() -> Result<()> {
+    let client = get_rpc_client_blocking()?;
+    let mint = "DrEMQaQqGN2fQwiUgJi6NStLtmni8m3uSkUP678Apump";
+
+    let pool_state = get_pool_state_by_mint(client, mint).await?;
+
+    println!("pool_state: {:#?}", pool_state);
+
     Ok(())
 }
 
 pub async fn get_amm_info() -> Result<()> {
     let client = get_rpc_client_blocking()?;
     // let amm_pool_id = Pubkey::from_str("3vehHGc8J9doSo6gJoWYG23JG54hc2i7wjdFReX3Rcah")?;
-    let amm_pool_id = Pubkey::from_str("5WGx6mE9Xww3ocYzSenGVQMJLCVVwK7ePnYV6cXcpJtK")?;
+    let amm_pool_id = Pubkey::from_str("7Sp76Pv48RaL4he2BfGUhvjqCtvjjfTSnXDXNvk845yL")?;
 
     let pool_state =
         common::rpc::get_account::<raydium_amm::state::AmmInfo>(&client, &amm_pool_id)?.unwrap();

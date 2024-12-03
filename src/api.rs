@@ -129,11 +129,10 @@ pub async fn coins(State(state): State<AppState>, Path(mint): Path<String>) -> i
             return api_error(&err.to_string());
         }
     };
-    if pump_info.raydium_pool.is_some() {
-        let pool_id = pump_info.raydium_pool.clone().unwrap();
+    if pump_info.complete {
         let mut swapx = Raydium::new(client, wallet);
         swapx.with_blocking_client(client_blocking);
-        match swapx.get_pool_price(&pool_id).await {
+        match swapx.get_pool_price(None, Some(mint.as_str())).await {
             Ok(data) => {
                 pump_info.raydium_info = Some(RaydiumInfo {
                     base: data.0,

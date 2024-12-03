@@ -422,36 +422,63 @@ pub async fn get_pool_state_by_mint(
     mint: &str,
 ) -> Result<(Pubkey, AmmInfo)> {
     debug!("finding pool state by mint: {}", mint);
-    let pc_mint = Some(spl_token::native_mint::ID);
-    let coin_mint = Pubkey::from_str(mint).ok();
-    // fetch pool by filters
-    let pool_len = core::mem::size_of::<raydium_amm::state::AmmInfo>() as u64;
-    let filters = match (coin_mint, pc_mint) {
-        (None, None) => Some(vec![RpcFilterType::DataSize(pool_len)]),
-        (Some(coin_mint), None) => Some(vec![
-            RpcFilterType::Memcmp(Memcmp::new_base58_encoded(400, &coin_mint.to_bytes())),
-            RpcFilterType::DataSize(pool_len),
-        ]),
-        (None, Some(pc_mint)) => Some(vec![
-            RpcFilterType::Memcmp(Memcmp::new_base58_encoded(432, &pc_mint.to_bytes())),
-            RpcFilterType::DataSize(pool_len),
-        ]),
-        (Some(coin_mint), Some(pc_mint)) => Some(vec![
-            RpcFilterType::Memcmp(Memcmp::new_base58_encoded(400, &coin_mint.to_bytes())),
-            RpcFilterType::Memcmp(Memcmp::new_base58_encoded(432, &pc_mint.to_bytes())),
-            RpcFilterType::DataSize(pool_len),
-        ]),
-    };
-    let amm_program = Pubkey::from_str(AMM_PROGRAM)?;
-    let pools =
-        common::rpc::get_program_accounts_with_filters(&rpc_client, amm_program, filters).unwrap();
+    // (pc_mint, coin_mint)
+    let pairs = vec![
+        // pump pool
+        (
+            Some(spl_token::native_mint::ID),
+            Pubkey::from_str(mint).ok(),
+        ),
+        // general pool
+        (
+            Pubkey::from_str(mint).ok(),
+            Some(spl_token::native_mint::ID),
+        ),
+    ];
 
-    if pools.len() > 1 {
-        let pool = &pools[0];
-        let pool_state = raydium_amm::state::AmmInfo::load_from_bytes(&pools[0].1.data)?;
-        Ok((pool.0, pool_state.clone()))
-    } else {
-        return Err(anyhow!("NotFoundPool: pool state not found"));
+    let pool_len = core::mem::size_of::<raydium_amm::state::AmmInfo>() as u64;
+    let amm_program = Pubkey::from_str(AMM_PROGRAM)?;
+    // Find matching AMM pool from mint pairs by filter
+    let mut found_pools = None;
+    for (coin_mint, pc_mint) in pairs {
+        debug!(
+            "get_pool_state_by_mint filter: coin_mint: {:?}, pc_mint: {:?}",
+            coin_mint, pc_mint
+        );
+        let filters = match (coin_mint, pc_mint) {
+            (None, None) => Some(vec![RpcFilterType::DataSize(pool_len)]),
+            (Some(coin_mint), None) => Some(vec![
+                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(400, &coin_mint.to_bytes())),
+                RpcFilterType::DataSize(pool_len),
+            ]),
+            (None, Some(pc_mint)) => Some(vec![
+                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(432, &pc_mint.to_bytes())),
+                RpcFilterType::DataSize(pool_len),
+            ]),
+            (Some(coin_mint), Some(pc_mint)) => Some(vec![
+                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(400, &coin_mint.to_bytes())),
+                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(432, &pc_mint.to_bytes())),
+                RpcFilterType::DataSize(pool_len),
+            ]),
+        };
+        let pools =
+            common::rpc::get_program_accounts_with_filters(&rpc_client, amm_program, filters)
+                .unwrap();
+        if !pools.is_empty() {
+            found_pools = Some(pools);
+            break;
+        }
+    }
+
+    match found_pools {
+        Some(pools) => {
+            let pool = &pools[0];
+            let pool_state = raydium_amm::state::AmmInfo::load_from_bytes(&pools[0].1.data)?;
+            Ok((pool.0, pool_state.clone()))
+        }
+        None => {
+            return Err(anyhow!("NotFoundPool: pool state not found"));
+        }
     }
 }
 

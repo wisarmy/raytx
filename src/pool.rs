@@ -1,16 +1,16 @@
-use std::str::FromStr;
-
 use anyhow::{Context, Result};
 use common::common_utils;
-use solana_sdk::pubkey::Pubkey;
 use spl_token_2022::amount_to_ui_amount;
 use tracing::{debug, warn};
 
-use crate::{helper::get_solana_price, raydium::Raydium};
+use crate::{
+    helper::get_solana_price,
+    raydium::{get_pool_state, Raydium},
+};
 
 impl Raydium {
     pub async fn get_pool(&self, pool_id: &str) -> Result<(f64, f64, f64, f64, f64)> {
-        let (base, quote, price) = self.get_pool_price(pool_id).await?;
+        let (base, quote, price) = self.get_pool_price(Some(pool_id), None).await?;
         let sol_price = get_solana_price()
             .await
             .inspect_err(|err| warn!("failed get solana price: {}", err))?;
@@ -21,17 +21,17 @@ impl Raydium {
         Ok((base, quote, price, usd_price, sol_price))
     }
 
-    pub async fn get_pool_price(&self, pool_id: &str) -> Result<(f64, f64, f64)> {
-        let amm_pool_id =
-            Pubkey::from_str(pool_id).inspect_err(|err| warn!("failed parse pool_id: {}", err))?;
+    pub async fn get_pool_price(
+        &self,
+        pool_id: Option<&str>,
+        mint: Option<&str>,
+    ) -> Result<(f64, f64, f64)> {
         let client = self
             .client_blocking
             .clone()
             .context("failed to get rpc client")?;
 
-        let pool_state =
-            common::rpc::get_account::<raydium_amm::state::AmmInfo>(&client, &amm_pool_id)?
-                .unwrap();
+        let (amm_pool_id, pool_state) = get_pool_state(client.clone(), pool_id, mint).await?;
 
         // debug!("pool_state : {:#?}", pool_state);
 
