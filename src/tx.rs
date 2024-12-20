@@ -117,7 +117,7 @@ pub async fn new_signed_and_send(
             },
             bundle_id,
             Duration::from_millis(1000),
-            Duration::from_secs(30),
+            Duration::from_secs(10),
         )
         .await?;
     } else {
