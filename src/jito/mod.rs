@@ -49,6 +49,17 @@ pub async fn get_tip_account() -> Result<Pubkey> {
 }
 // unit sol
 pub async fn get_tip_value() -> Result<f64> {
+    // If TIP_VALUE is set, use it
+    if let Ok(tip_value) = std::env::var("JITO_TIP_VALUE") {
+        if let Ok(value) = f64::from_str(&tip_value) {
+            return Ok(value);
+        } else {
+            warn!(
+                "Invalid TIP_VALUE in environment variable, falling back to percentile calculation"
+            );
+        }
+    }
+
     let tips = TIPS_PERCENTILE.read().await;
 
     if let Some(ref data) = *tips {

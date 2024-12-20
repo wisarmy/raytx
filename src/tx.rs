@@ -12,13 +12,25 @@ use solana_sdk::{
 };
 use spl_token::ui_amount_to_amount;
 
+use std::str::FromStr;
 use tokio::time::Instant;
 use tracing::{error, info};
 
 use crate::jito::{self, get_tip_account, get_tip_value, wait_for_bundle_confirmation};
 // prioritization fee = UNIT_PRICE * UNIT_LIMIT
-pub const UNIT_PRICE: u64 = 1;
-pub const UNIT_LIMIT: u32 = 300_000;
+fn get_unit_price() -> u64 {
+    env::var("UNIT_PRICE")
+        .ok()
+        .and_then(|v| u64::from_str(&v).ok())
+        .unwrap_or(1)
+}
+
+fn get_unit_limit() -> u32 {
+    env::var("UNIT_LIMIT")
+        .ok()
+        .and_then(|v| u32::from_str(&v).ok())
+        .unwrap_or(300_000)
+}
 
 pub async fn new_signed_and_send(
     client: &RpcClient,
@@ -26,15 +38,17 @@ pub async fn new_signed_and_send(
     mut instructions: Vec<Instruction>,
     use_jito: bool,
 ) -> Result<Vec<String>> {
+    let unit_price = get_unit_price();
+    let unit_limit = get_unit_limit();
     // If not using Jito, manually set the compute unit price and limit
     if !use_jito {
         let modify_compute_units =
             solana_sdk::compute_budget::ComputeBudgetInstruction::set_compute_unit_price(
-                UNIT_PRICE,
+                unit_price,
             );
         let add_priority_fee =
             solana_sdk::compute_budget::ComputeBudgetInstruction::set_compute_unit_limit(
-                UNIT_LIMIT,
+                unit_limit,
             );
         instructions.insert(0, modify_compute_units);
         instructions.insert(1, add_priority_fee);
