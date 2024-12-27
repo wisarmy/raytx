@@ -18,7 +18,9 @@ use solana_sdk::{
     signer::Signer,
     system_instruction,
 };
-use spl_associated_token_account::instruction::create_associated_token_account;
+use spl_associated_token_account::{
+    get_associated_token_address, instruction::create_associated_token_account,
+};
 use spl_token::{amount_to_ui_amount, ui_amount_to_amount};
 use spl_token_client::token::TokenError;
 use std::{str::FromStr, sync::Arc};
@@ -101,18 +103,8 @@ impl Raydium {
 
         debug!("token_in:{token_in}, token_out:{token_out}, user_input_token:{user_input_token}, swap_base_in:{swap_base_in}");
 
-        let in_ata = token::get_associated_token_address(
-            self.client.clone(),
-            self.keypair.clone(),
-            &token_in,
-            &owner,
-        );
-        let out_ata = token::get_associated_token_address(
-            self.client.clone(),
-            self.keypair.clone(),
-            &token_out,
-            &owner,
-        );
+        let in_ata = get_associated_token_address(&owner, &token_in);
+        let out_ata = get_associated_token_address(&owner, &token_out);
 
         let mut create_instruction = None;
         let mut close_instruction = None;

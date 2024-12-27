@@ -10,8 +10,8 @@ use spl_token_2022::{
     state::{Account, Mint},
 };
 use spl_token_client::{
-    client::{ProgramClient, ProgramRpcClient, ProgramRpcClientSendTransaction, RpcClientResponse},
-    token::{Token, TokenError, TokenResult},
+    client::{ProgramClient, ProgramRpcClient, ProgramRpcClientSendTransaction},
+    token::{TokenError, TokenResult},
 };
 use tracing::{trace, warn};
 
@@ -157,44 +157,6 @@ pub async fn get_account_info(
 //     );
 //     token_client.get_account_info(account).await
 // }
-
-pub fn get_associated_token_address(
-    client: Arc<RpcClient>,
-    keypair: Arc<Keypair>,
-    address: &Pubkey,
-    owner: &Pubkey,
-) -> Pubkey {
-    let token_client = Token::new(
-        Arc::new(ProgramRpcClient::new(
-            client.clone(),
-            ProgramRpcClientSendTransaction,
-        )),
-        &spl_token::ID,
-        address,
-        None,
-        Arc::new(Keypair::from_bytes(&keypair.to_bytes()).expect("failed to copy keypair")),
-    );
-    token_client.get_associated_token_address(owner)
-}
-
-pub async fn create_associated_token_account(
-    client: Arc<RpcClient>,
-    keypair: Arc<Keypair>,
-    address: &Pubkey,
-    owner: &Pubkey,
-) -> Result<RpcClientResponse, TokenError> {
-    let token_client = Token::new(
-        Arc::new(ProgramRpcClient::new(
-            client.clone(),
-            ProgramRpcClientSendTransaction,
-        )),
-        &spl_token::ID,
-        address,
-        None,
-        Arc::new(Keypair::from_bytes(&keypair.to_bytes()).expect("failed to copy keypair")),
-    );
-    token_client.create_associated_token_account(owner).await
-}
 
 pub async fn get_mint_info(
     client: Arc<RpcClient>,

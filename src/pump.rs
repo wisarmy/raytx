@@ -85,19 +85,8 @@ impl Pump {
         let (bonding_curve, associated_bonding_curve, bonding_curve_account) =
             get_bonding_curve_account(self.client_blocking.clone().unwrap(), &mint, &pump_program)
                 .await?;
-
-        let in_ata = token::get_associated_token_address(
-            self.client.clone(),
-            self.keypair.clone(),
-            &token_in,
-            &owner,
-        );
-        let out_ata = token::get_associated_token_address(
-            self.client.clone(),
-            self.keypair.clone(),
-            &token_out,
-            &owner,
-        );
+        let in_ata = get_associated_token_address(&owner, &token_in);
+        let out_ata = get_associated_token_address(&owner, &token_out);
 
         let mut create_instruction = None;
         let mut close_instruction = None;
