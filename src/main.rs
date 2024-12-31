@@ -5,8 +5,6 @@ use axum::{
     Router,
 };
 use clap::{ArgGroup, Parser, Subcommand};
-#[cfg(feature = "swap_ts")]
-use raytx::swap_ts;
 use raytx::{
     api::{self, AppState},
     get_rpc_client, get_rpc_client_blocking, get_wallet, jito, logger,
@@ -29,28 +27,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    #[cfg(feature = "swap_ts")]
-    #[command(about = "swap the mint token by ts")]
-    #[command(group(
-        ArgGroup::new("amount")
-            .required(true)
-            .args(&["amount_in", "amount_in_pct"]),
-    ))]
-    SwapTs {
-        mint: String,
-        #[arg(value_enum)]
-        direction: SwapDirection,
-        #[arg(long, help = "amount in")]
-        amount_in: Option<f64>,
-        #[arg(long, help = "amount in percentage, only support sell")]
-        amount_in_pct: Option<f64>,
-        #[arg(
-            long,
-            help = "If set, this API will be used for swap. otherwise, the swap CLI will be used."
-        )]
-        addr: Option<String>,
-    },
-    #[command(about = "swap the mint token by rs")]
+    #[command(about = "swap the mint token")]
     #[command(group(
         ArgGroup::new("amount")
             .required(true)
@@ -108,28 +85,6 @@ async fn main() -> Result<()> {
     };
 
     match &cli.command {
-        #[cfg(feature = "swap_ts")]
-        Some(Command::SwapTs {
-            mint,
-            direction,
-            amount_in,
-            amount_in_pct,
-            addr,
-        }) => {
-            let (amount_in, in_type) = if let Some(amount_in) = amount_in {
-                (amount_in, SwapInType::Qty)
-            } else if let Some(amount_in) = amount_in_pct {
-                (amount_in, SwapInType::Pct)
-            } else {
-                panic!("either in_amount or in_amount_pct must be provided");
-            };
-
-            debug!("{} {:?} {:?} {:?}", mint, direction, amount_in, in_type);
-            let swapx = swap_ts::Swap::new(client, wallet.pubkey(), addr.clone());
-            swapx
-                .swap(mint, *amount_in, direction.clone(), in_type)
-                .await?;
-        }
         Some(Command::Swap {
             mint,
             direction,

@@ -1,12 +1,19 @@
 # Raytx
 
-Raytx is a command-line tool written in Rust for performing token swap operations on Raydium.
+Raytx is a powerful tool for performing token swap operations on Raydium and Pump.fun, providing both CLI and API interfaces.
+
+## Features
+
+- Command-line interface for quick swaps
+- RESTful API service for programmatic access
+- Support for buy/sell operations
+- Integration with Jito for faster transactions
+- Percentage-based selling options
 
 ## Project Dependencies
 
 Before getting started, ensure that the following software is installed on your system:
 
-- [Node.js](https://nodejs.org/) If using TS for swap
 - [Rust](https://www.rust-lang.org/) version 1.8 or higher.
 
 
@@ -14,7 +21,7 @@ Before getting started, ensure that the following software is installed on your 
 ```
 cargo build -r
 ```
-This will generate an executable file raytx, located in the target/release/raytx.
+This will generate an executable file raytx, located in the `target/release/raytx`.
 
 ## Using the Command-Line Tool
 ### Buy

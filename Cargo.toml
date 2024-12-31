@@ -2,7 +2,6 @@
 name = "raytx"
 version = "0.1.0"
 edition = "2021"
-build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -22,7 +21,6 @@ solana-client = "=1.16.27"
 solana-sdk = "=1.16.27"
 solana-account-decoder = "=1.16.27"
 spl-token-client = "=0.7.1"
-# raydium-library = { git = "https://github.com/raydium-io/raydium-library" }
 amm-cli = { git = "https://github.com/raydium-io/raydium-library" }
 common = { git = "https://github.com/raydium-io/raydium-library" }
 
@@ -41,7 +39,7 @@ rand = "0.8.5"
 indicatif = "0.17.8"
 axum = { version = "0.7.5", features = ["macros"] }
 tower-http = { version = "0.5.2", features = ["cors"] }
-borsh = { version = "1.5.3"}
+borsh = { version = "1.5.3" }
 borsh-derive = "1.5.3"
 
 [dev-dependencies]
@@ -50,4 +48,3 @@ ctor = "0.2.8"
 
 [features]
 slow_tests = []
-swap_ts = []

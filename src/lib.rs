@@ -16,8 +16,6 @@ pub mod pool;
 pub mod pump;
 pub mod raydium;
 pub mod swap;
-#[cfg(feature = "swap_ts")]
-pub mod swap_ts;
 pub mod token;
 pub mod tx;
 
