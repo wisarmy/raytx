@@ -22,14 +22,14 @@ fn get_unit_price() -> u64 {
     env::var("UNIT_PRICE")
         .ok()
         .and_then(|v| u64::from_str(&v).ok())
-        .unwrap_or(1)
+        .unwrap_or(20000)
 }
 
 fn get_unit_limit() -> u32 {
     env::var("UNIT_LIMIT")
         .ok()
         .and_then(|v| u32::from_str(&v).ok())
-        .unwrap_or(300_000)
+        .unwrap_or(200_000)
 }
 
 pub async fn new_signed_and_send(
@@ -38,17 +38,17 @@ pub async fn new_signed_and_send(
     mut instructions: Vec<Instruction>,
     use_jito: bool,
 ) -> Result<Vec<String>> {
-    let unit_price = get_unit_price();
     let unit_limit = get_unit_limit();
+    let unit_price = get_unit_price();
     // If not using Jito, manually set the compute unit price and limit
     if !use_jito {
         let modify_compute_units =
-            solana_sdk::compute_budget::ComputeBudgetInstruction::set_compute_unit_price(
-                unit_price,
-            );
-        let add_priority_fee =
             solana_sdk::compute_budget::ComputeBudgetInstruction::set_compute_unit_limit(
                 unit_limit,
+            );
+        let add_priority_fee =
+            solana_sdk::compute_budget::ComputeBudgetInstruction::set_compute_unit_price(
+                unit_price,
             );
         instructions.insert(0, modify_compute_units);
         instructions.insert(1, add_priority_fee);
