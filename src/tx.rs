@@ -80,10 +80,6 @@ pub async fn new_signed_and_send(
     if use_jito {
         // jito
         let tip_account = get_tip_account().await?;
-        let jito_client = Arc::new(JitoRpcClient::new(format!(
-            "{}/api/v1/bundles",
-            jito::BLOCK_ENGINE_URL.to_string()
-        )));
         // jito tip, the upper limit is 0.1
         let mut tip = get_tip_value().await?;
         tip = tip.min(0.1);
@@ -92,6 +88,11 @@ pub async fn new_signed_and_send(
             "tip account: {}, tip(sol): {}, lamports: {}",
             tip_account, tip, tip_lamports
         );
+
+        let jito_client = Arc::new(JitoRpcClient::new(format!(
+            "{}/api/v1/bundles",
+            jito::BLOCK_ENGINE_URL.to_string()
+        )));
         // tip tx
         let mut bundle: Vec<VersionedTransaction> = vec![];
         bundle.push(VersionedTransaction::from(txn));

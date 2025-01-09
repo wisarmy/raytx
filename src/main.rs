@@ -107,14 +107,20 @@ async fn main() -> Result<()> {
             );
             // jito
             if *jito {
-                jito::init_tip_accounts().await.unwrap();
-                tokio::spawn(async {
-                    if let Err(e) = jito::ws::tip_stream().await {
-                        println!("Error: {:?}", e);
-                    }
-                });
-                info!("waiting 5s for get tip percentiles data");
-                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                jito::init_tip_accounts()
+                    .await
+                    .map_err(|err| {
+                        info!("failed to get tip accounts: {:?}", err);
+                        err
+                    })
+                    .unwrap();
+                jito::init_tip_amounts()
+                    .await
+                    .map_err(|err| {
+                        info!("failed to init tip amounts: {:?}", err);
+                        err
+                    })
+                    .unwrap();
             }
 
             swap::swap(

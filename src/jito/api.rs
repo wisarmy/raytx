@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use reqwest::Proxy;
 use serde::{Deserialize, Serialize};
 
-use super::BLOCK_ENGINE_URL;
+use super::{TipPercentileData, BLOCK_ENGINE_URL};
 
 #[derive(Serialize)]
 struct RpcRequest {
@@ -61,4 +61,21 @@ impl TryFrom<RpcResponse> for TipAccountResult {
             .collect();
         Ok(TipAccountResult { accounts })
     }
+}
+
+pub async fn get_tip_amounts() -> Result<Vec<TipPercentileData>> {
+    let mut client_builder = reqwest::Client::builder();
+    if let Ok(http_proxy) = env::var("HTTP_PROXY") {
+        let proxy = Proxy::all(http_proxy)?;
+        client_builder = client_builder.proxy(proxy);
+    }
+    let client = client_builder.build()?;
+
+    let result = client
+        .get("https://bundles.jito.wtf/api/v1/bundles/tip_floor")
+        .send()
+        .await?
+        .json::<Vec<TipPercentileData>>()
+        .await?;
+    Ok(result)
 }

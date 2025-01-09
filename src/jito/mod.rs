@@ -12,12 +12,25 @@ use tokio::{
     time::{sleep, Instant},
 };
 use tracing::{debug, error, info, warn};
-use ws::TIPS_PERCENTILE;
 
 use crate::get_env_var;
 
 pub mod api;
 pub mod ws;
+
+pub static TIPS_PERCENTILE: LazyLock<RwLock<Option<TipPercentileData>>> =
+    LazyLock::new(|| RwLock::new(None));
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct TipPercentileData {
+    pub time: String,
+    pub landed_tips_25th_percentile: f64,
+    pub landed_tips_50th_percentile: f64,
+    pub landed_tips_75th_percentile: f64,
+    pub landed_tips_95th_percentile: f64,
+    pub landed_tips_99th_percentile: f64,
+    pub ema_landed_tips_50th_percentile: f64,
+}
 
 pub static BLOCK_ENGINE_URL: LazyLock<String> =
     LazyLock::new(|| get_env_var("JITO_BLOCK_ENGINE_URL"));
@@ -47,6 +60,14 @@ pub async fn get_tip_account() -> Result<Pubkey> {
         None => Err(anyhow!("jito: no tip accounts available")),
     }
 }
+
+pub async fn init_tip_amounts() -> Result<()> {
+    let tip_percentiles = api::get_tip_amounts().await?;
+    *TIPS_PERCENTILE.write().await = tip_percentiles.first().cloned();
+
+    Ok(())
+}
+
 // unit sol
 pub async fn get_tip_value() -> Result<f64> {
     // If TIP_VALUE is set, use it
