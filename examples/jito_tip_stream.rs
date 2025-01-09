@@ -1,5 +1,5 @@
 use anyhow::Result;
-use raytx::jito::ws::{tip_stream, TIPS_PERCENTILE};
+use raytx::jito::{ws::tip_stream, TIPS_PERCENTILE};
 #[tokio::main]
 async fn main() -> Result<()> {
     tokio::spawn(async {
