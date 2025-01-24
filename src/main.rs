@@ -72,7 +72,12 @@ enum TokenCommand {
 }
 #[tokio::main]
 async fn main() -> Result<()> {
-    dotenvy::dotenv().ok();
+    if let Ok(env_path) = env::var("DOTENV_PATH") {
+        println!("Using env_path: {}", env_path);
+        dotenvy::from_path(env_path).ok();
+    } else {
+        dotenvy::dotenv().ok();
+    }
     let cli = Cli::parse();
     logger::init();
     let client = get_rpc_client()?;
