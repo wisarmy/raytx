@@ -377,10 +377,10 @@ pub async fn get_pool_state(
     if let Some(pool_id) = pool_id {
         debug!("finding pool state by pool_id: {}", pool_id);
         let amm_pool_id = Pubkey::from_str(pool_id)?;
-        let pool_state =
-            common::rpc::get_account::<raydium_amm::state::AmmInfo>(&rpc_client, &amm_pool_id)?
-                .ok_or(anyhow!("NotFoundPool: pool state not found"))?;
-        Ok((amm_pool_id, pool_state))
+        let pool_data = common::rpc::get_account(&rpc_client, &amm_pool_id)?
+            .ok_or(anyhow!("NotFoundPool: pool state not found"))?;
+        let pool_state = AmmInfo::load_from_bytes(&pool_data)?;
+        Ok((amm_pool_id, *pool_state))
     } else {
         if let Some(mint) = mint {
             // find pool by mint via rpc
@@ -395,12 +395,10 @@ pub async fn get_pool_state(
                     .ok_or(anyhow!("NotFoundPool: pool not found in raydium api"))?;
                 let amm_pool_id = Pubkey::from_str(&pool.id)?;
                 debug!("finding pool state by raydium api: {}", amm_pool_id);
-                let pool_state = common::rpc::get_account::<raydium_amm::state::AmmInfo>(
-                    &rpc_client,
-                    &amm_pool_id,
-                )?
-                .ok_or(anyhow!("NotFoundPool: pool state not found"))?;
-                return Ok((amm_pool_id, pool_state));
+                let pool_data = common::rpc::get_account(&rpc_client, &amm_pool_id)?
+                    .ok_or(anyhow!("NotFoundPool: pool state not found"))?;
+                let pool_state = AmmInfo::load_from_bytes(&pool_data)?;
+                return Ok((amm_pool_id, *pool_state));
             }
             Err(anyhow!("NotFoundPool: pool state not found"))
         } else {

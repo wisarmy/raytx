@@ -4,6 +4,7 @@ use amm_cli::load_amm_keys;
 use anyhow::{Context, Result};
 use common::common_utils;
 use futures_util::{SinkExt, StreamExt};
+use raydium_amm::state::{AmmInfo, Loadable};
 use raytx::{get_rpc_client_blocking, logger, pump::PUMP_PROGRAM, raydium::get_pool_state_by_mint};
 use solana_client::rpc_client::GetConfirmedSignaturesForAddress2Config;
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
@@ -36,9 +37,8 @@ pub async fn get_amm_info() -> Result<()> {
     let client = get_rpc_client_blocking()?;
     // let amm_pool_id = Pubkey::from_str("3vehHGc8J9doSo6gJoWYG23JG54hc2i7wjdFReX3Rcah")?;
     let amm_pool_id = Pubkey::from_str("7Sp76Pv48RaL4he2BfGUhvjqCtvjjfTSnXDXNvk845yL")?;
-
-    let pool_state =
-        common::rpc::get_account::<raydium_amm::state::AmmInfo>(&client, &amm_pool_id)?.unwrap();
+    let pool_data = common::rpc::get_account(&client, &amm_pool_id)?;
+    let pool_state = AmmInfo::load_from_bytes(&pool_data.as_ref().unwrap())?;
 
     println!("pool_state : {:#?}", pool_state);
     let amm_program = Pubkey::from_str("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8")?;
