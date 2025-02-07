@@ -35,7 +35,7 @@ pub struct CreateSwap {
     amount_in: f64,
     in_type: Option<SwapInType>,
     slippage: Option<u64>,
-    jito: Option<bool>,
+    jito: Option<bool>
 }
 
 #[debug_handler]
@@ -61,7 +61,7 @@ pub async fn swap(
         input.direction.clone(),
         input.in_type.unwrap_or(SwapInType::Qty),
         slippage,
-        input.jito.unwrap_or(false),
+        input.jito.unwrap_or(false)
     )
     .await;
     match result {

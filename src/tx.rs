@@ -36,7 +36,7 @@ pub async fn new_signed_and_send(
     client: &RpcClient,
     keypair: &Keypair,
     mut instructions: Vec<Instruction>,
-    use_jito: bool,
+    use_jito: bool
 ) -> Result<Vec<String>> {
     let unit_limit = get_unit_limit();
     let unit_price = get_unit_price();
@@ -122,7 +122,15 @@ pub async fn new_signed_and_send(
         )
         .await?;
     } else {
-        let sig = common::rpc::send_txn(&client, &txn, true)?;
+        let config = solana_client::rpc_config::RpcSendTransactionConfig {
+            skip_preflight: env::var("SKIP_PREFLIGHT").unwrap_or_else(|_| "true".to_string()).parse().unwrap_or(true),
+            preflight_commitment: None,
+            encoding: None,
+            max_retries: None,
+            min_context_slot: None,
+        };
+        
+        let sig = client.send_transaction_with_config(&txn, config)?;
         info!("signature: {:?}", sig);
         txs.push(sig.to_string());
     }

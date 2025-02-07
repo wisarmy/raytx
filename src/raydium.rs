@@ -73,7 +73,7 @@ impl Raydium {
         swap_direction: SwapDirection,
         in_type: SwapInType,
         slippage: u64,
-        use_jito: bool,
+        use_jito: bool
     ) -> Result<Vec<String>> {
         // slippage_bps = 50u64; // 0.5%
         let slippage_bps = slippage * 100;

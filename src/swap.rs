@@ -42,7 +42,7 @@ pub async fn swap(
     swap_direction: SwapDirection,
     in_type: SwapInType,
     slippage: u64,
-    use_jito: bool,
+    use_jito: bool
 ) -> Result<Vec<String>> {
     let client = get_rpc_client()?;
     let client_blocking = get_rpc_client_blocking()?;

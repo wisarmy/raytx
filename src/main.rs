@@ -42,7 +42,7 @@ enum Command {
         #[arg(long, help = "amount in percentage, only support sell")]
         amount_in_pct: Option<f64>,
         #[arg(long, help = "use jito to swap", default_value_t = false)]
-        jito: bool,
+        jito: bool
     },
     Daemon {
         #[arg(
@@ -95,7 +95,7 @@ async fn main() -> Result<()> {
             direction,
             amount_in,
             amount_in_pct,
-            jito,
+            jito
         }) => {
             let (amount_in, in_type) = if let Some(amount_in) = amount_in {
                 (amount_in, SwapInType::Qty)
@@ -135,7 +135,7 @@ async fn main() -> Result<()> {
                 direction.clone(),
                 in_type,
                 slippage,
-                *jito,
+                *jito
             )
             .await?;
         }
