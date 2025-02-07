@@ -51,22 +51,34 @@ pub fn get_random_rpc_url() -> Result<String> {
     return Ok(random_url);
 }
 
+pub fn get_commitment_config() -> Result<CommitmentConfig> {
+    let commitment = env::var("COMMITMENT_LEVEL")?.to_lowercase();
+    match commitment.as_str() {
+        "processed" => Ok(CommitmentConfig::processed()),
+        "confirmed" => Ok(CommitmentConfig::confirmed()),
+        "finalized" => Ok(CommitmentConfig::finalized()),
+        _ => Ok(CommitmentConfig::processed()) // default fallback
+    }
+}
+
 pub fn get_rpc_client() -> Result<Arc<RpcClient>> {
     let random_url = get_random_rpc_url()?;
+    let commitment = get_commitment_config()?;
     let client = RpcClient::new_with_timeout_and_commitment(
         random_url, 
         Duration::from_secs(1),
-        CommitmentConfig::confirmed()
+        commitment
     );
     Ok(Arc::new(client))
 }
 
 pub fn get_rpc_client_blocking() -> Result<Arc<solana_client::rpc_client::RpcClient>> {
     let random_url = get_random_rpc_url()?;
+    let commitment = get_commitment_config()?;
     let client = solana_client::rpc_client::RpcClient::new_with_timeout_and_commitment(
         random_url,
         Duration::from_secs(1), 
-        CommitmentConfig::confirmed()
+        commitment
     );
     Ok(Arc::new(client))
 }

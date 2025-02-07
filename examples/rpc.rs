@@ -5,9 +5,9 @@ use anyhow::{Context, Result};
 use common::common_utils;
 use futures_util::{SinkExt, StreamExt};
 use raydium_amm::state::{AmmInfo, Loadable};
-use raytx::{get_rpc_client_blocking, logger, pump::PUMP_PROGRAM, raydium::get_pool_state_by_mint};
+use raytx::{get_rpc_client_blocking, logger, pump::PUMP_PROGRAM, raydium::get_pool_state_by_mint, get_commitment_config};
 use solana_client::rpc_client::GetConfirmedSignaturesForAddress2Config;
-use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
+use solana_sdk::pubkey::Pubkey;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info};
 #[tokio::main]
@@ -95,11 +95,12 @@ pub async fn get_amm_info() -> Result<()> {
 
 pub async fn get_signatures() -> Result<()> {
     let client = get_rpc_client_blocking()?;
+    let commitment = get_commitment_config()?;
     let config = GetConfirmedSignaturesForAddress2Config {
         before: None,
         until: None,
         limit: Some(3),
-        commitment: Some(CommitmentConfig::confirmed()),
+        commitment: Some(commitment),
     };
 
     let address = Pubkey::from_str(PUMP_PROGRAM)?;
@@ -119,16 +120,18 @@ pub async fn connect_websocket() -> Result<()> {
     info!("Connected to WebSocket server: sol websocket");
 
     let (mut write, mut read) = ws_stream.split();
+    let commitment = get_commitment_config()?;
+    let commitment_str = format!("{:?}", commitment).to_lowercase();
 
     let _program_subscribe = serde_json::json!({
       "jsonrpc": "2.0",
       "id": 1,
-      "method": "programSubscribe",
+      "method": "programSubscribe", 
       "params": [
         PUMP_PROGRAM,
         {
           "encoding": "jsonParsed",
-          "commitment": "processed"
+          "commitment": commitment_str
         }
       ]
     });
@@ -141,7 +144,7 @@ pub async fn connect_websocket() -> Result<()> {
               "mentions": [ PUMP_PROGRAM ]
             },
             {
-              "commitment": "processed"
+              "commitment": commitment_str
             }
           ]
     });
