@@ -5,7 +5,7 @@ use tracing::{info, warn};
 
 use crate::{
     api::AppState,
-    get_rpc_client, get_rpc_client_blocking,
+    get_rpc_client,
     pump::{self, get_pump_info},
     raydium,
 };
@@ -45,30 +45,25 @@ pub async fn swap(
     use_jito: bool,
 ) -> Result<Vec<String>> {
     let client = get_rpc_client()?;
-    let client_blocking = get_rpc_client_blocking()?;
     let wallet = state.wallet;
 
-    let swap_in_pump = get_pump_info(client_blocking.clone(), mint)
-        .await
-        .map_or_else(
-            |err| {
-                warn!("failed to get_pump_info: {}", err);
-                false
-            },
-            |pump_info| !pump_info.complete,
-        );
+    let swap_in_pump = get_pump_info(client.clone(), mint).await.map_or_else(
+        |err| {
+            warn!("failed to get_pump_info: {}", err);
+            false
+        },
+        |pump_info| !pump_info.complete,
+    );
 
     if swap_in_pump {
         info!("swap in pump fun");
-        let mut swapx = pump::Pump::new(client, wallet);
-        swapx.with_blocking_client(client_blocking);
+        let swapx = pump::Pump::new(client, wallet);
         swapx
             .swap(mint, amount_in, swap_direction, in_type, slippage, use_jito)
             .await
     } else {
         info!("swap in raydium");
-        let mut swapx = raydium::Raydium::new(client, wallet);
-        swapx.with_blocking_client(client_blocking);
+        let swapx = raydium::Raydium::new(client, wallet);
         swapx
             .swap(mint, amount_in, swap_direction, in_type, slippage, use_jito)
             .await

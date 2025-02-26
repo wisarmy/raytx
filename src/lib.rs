@@ -3,7 +3,7 @@ use std::{env, sync::Arc};
 use anyhow::{anyhow, Result};
 use rand::seq::SliceRandom;
 use reqwest::Proxy;
-use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_client::rpc_client::RpcClient;
 use solana_sdk::signature::Keypair;
 use tracing::debug;
 
@@ -52,12 +52,6 @@ pub fn get_random_rpc_url() -> Result<String> {
 pub fn get_rpc_client() -> Result<Arc<RpcClient>> {
     let random_url = get_random_rpc_url()?;
     let client = RpcClient::new(random_url);
-    return Ok(Arc::new(client));
-}
-
-pub fn get_rpc_client_blocking() -> Result<Arc<solana_client::rpc_client::RpcClient>> {
-    let random_url = get_random_rpc_url()?;
-    let client = solana_client::rpc_client::RpcClient::new(random_url);
     return Ok(Arc::new(client));
 }
 

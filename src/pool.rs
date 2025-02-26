@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use common::common_utils;
 use spl_token_2022::amount_to_ui_amount;
 use tracing::{debug, warn};
@@ -26,17 +26,12 @@ impl Raydium {
         pool_id: Option<&str>,
         mint: Option<&str>,
     ) -> Result<(f64, f64, f64)> {
-        let client = self
-            .client_blocking
-            .clone()
-            .context("failed to get rpc client")?;
-
-        let (amm_pool_id, pool_state) = get_pool_state(client.clone(), pool_id, mint).await?;
+        let (amm_pool_id, pool_state) = get_pool_state(self.client.clone(), pool_id, mint).await?;
 
         // debug!("pool_state : {:#?}", pool_state);
 
         let load_pubkeys = vec![pool_state.pc_vault, pool_state.coin_vault];
-        let rsps = common::rpc::get_multiple_accounts(&client, &load_pubkeys).unwrap();
+        let rsps = common::rpc::get_multiple_accounts(&self.client, &load_pubkeys).unwrap();
 
         let amm_pc_vault_account = rsps[0].clone();
         let amm_coin_vault_account = rsps[1].clone();

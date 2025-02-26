@@ -8,12 +8,12 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::json;
-use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_client::rpc_client::RpcClient;
 use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer};
 use tracing::{info, warn};
 
 use crate::{
-    get_rpc_client, get_rpc_client_blocking,
+    get_rpc_client,
     helper::{api_error, api_ok},
     pump::{get_pump_info, RaydiumInfo},
     raydium::Raydium,
@@ -24,7 +24,6 @@ use crate::{
 #[derive(Clone)]
 pub struct AppState {
     pub client: Arc<RpcClient>,
-    pub client_blocking: Arc<solana_client::rpc_client::RpcClient>,
     pub wallet: Arc<Keypair>,
 }
 
@@ -84,15 +83,8 @@ pub async fn get_pool(
             return api_error(&format!("failed to get rpc client: {err}"));
         }
     };
-    let client_blocking = match get_rpc_client_blocking() {
-        Ok(client) => client,
-        Err(err) => {
-            return api_error(&format!("failed to get rpc client: {err}"));
-        }
-    };
     let wallet = state.wallet;
-    let mut swapx = Raydium::new(client, wallet);
-    swapx.with_blocking_client(client_blocking);
+    let swapx = Raydium::new(client, wallet);
     match swapx.get_pool(pool_id.as_str()).await {
         Ok(data) => api_ok(json!({
             "base": data.0,
@@ -115,23 +107,16 @@ pub async fn coins(State(state): State<AppState>, Path(mint): Path<String>) -> i
             return api_error(&format!("failed to get rpc client: {err}"));
         }
     };
-    let client_blocking = match get_rpc_client_blocking() {
-        Ok(client) => client,
-        Err(err) => {
-            return api_error(&format!("failed to get rpc client: {err}"));
-        }
-    };
     let wallet = state.wallet;
     // query from pump.fun
-    let mut pump_info = match get_pump_info(client_blocking.clone(), &mint).await {
+    let mut pump_info = match get_pump_info(client.clone(), &mint).await {
         Ok(info) => info,
         Err(err) => {
             return api_error(&err.to_string());
         }
     };
     if pump_info.complete {
-        let mut swapx = Raydium::new(client, wallet);
-        swapx.with_blocking_client(client_blocking);
+        let swapx = Raydium::new(client, wallet);
         match swapx.get_pool_price(None, Some(mint.as_str())).await {
             Ok(data) => {
                 pump_info.raydium_info = Some(RaydiumInfo {

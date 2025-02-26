@@ -7,7 +7,7 @@ use axum::{
 use clap::{ArgGroup, Parser, Subcommand};
 use raytx::{
     api::{self, AppState},
-    get_rpc_client, get_rpc_client_blocking, get_wallet, jito, logger,
+    get_rpc_client, get_wallet, jito, logger,
     raydium::get_pool_info,
     swap::{self, SwapDirection, SwapInType},
     token,
@@ -81,13 +81,8 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     logger::init();
     let client = get_rpc_client()?;
-    let client_blocking = get_rpc_client_blocking()?;
     let wallet = get_wallet()?;
-    let app_state = AppState {
-        client,
-        client_blocking,
-        wallet,
-    };
+    let app_state = AppState { client, wallet };
 
     match &cli.command {
         Some(Command::Swap {

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use solana_account_decoder::UiAccountData;
-use solana_client::{nonblocking::rpc_client::RpcClient, rpc_request::TokenAccountsFilter};
+use solana_client::{rpc_client::RpcClient, rpc_request::TokenAccountsFilter};
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use spl_token_2022::{
     extension::StateWithExtensionsOwned,
@@ -83,6 +83,7 @@ async fn token_accounts_filter(
     filter: TokenAccountsFilter,
 ) -> Result<TokenAccounts> {
     let token_accounts = client
+        .get_inner_client()
         .get_token_accounts_by_owner(owner, filter)
         .await
         .expect("Failed to get token accounts");
@@ -118,7 +119,7 @@ pub async fn get_account_info(
     account: &Pubkey,
 ) -> TokenResult<StateWithExtensionsOwned<Account>> {
     let program_client = Arc::new(ProgramRpcClient::new(
-        client.clone(),
+        client.get_inner_client().clone(),
         ProgramRpcClientSendTransaction,
     ));
     let account = program_client
@@ -164,7 +165,7 @@ pub async fn get_mint_info(
     address: &Pubkey,
 ) -> TokenResult<StateWithExtensionsOwned<Mint>> {
     let program_client = Arc::new(ProgramRpcClient::new(
-        client.clone(),
+        client.get_inner_client().clone(),
         ProgramRpcClientSendTransaction,
     ));
     let account = program_client

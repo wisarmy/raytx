@@ -6,7 +6,7 @@ use raydium_amm::state::{AmmInfo, Loadable};
 use reqwest::Proxy;
 use serde::Deserialize;
 use solana_client::{
-    nonblocking::rpc_client::RpcClient,
+    rpc_client::RpcClient,
     rpc_filter::{Memcmp, RpcFilterType},
 };
 use solana_sdk::{
@@ -26,7 +26,6 @@ use spl_token_client::token::TokenError;
 use std::{str::FromStr, sync::Arc};
 
 use crate::{
-    get_rpc_client_blocking,
     swap::{SwapDirection, SwapInType},
     token, tx,
 };
@@ -39,7 +38,6 @@ pub const AMM_PROGRAM: &str = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
 pub struct Raydium {
     pub client: Arc<RpcClient>,
     pub keypair: Arc<Keypair>,
-    pub client_blocking: Option<Arc<solana_client::rpc_client::RpcClient>>,
     pub pool_id: Option<String>,
 }
 
@@ -48,17 +46,8 @@ impl Raydium {
         Self {
             client,
             keypair,
-            client_blocking: None,
             pool_id: None,
         }
-    }
-
-    pub fn with_blocking_client(
-        &mut self,
-        client: Arc<solana_client::rpc_client::RpcClient>,
-    ) -> &mut Self {
-        self.client_blocking = Some(client);
-        self
     }
 
     pub fn with_pool_id(&mut self, pool_id: Option<String>) -> &mut Self {
@@ -83,12 +72,8 @@ impl Raydium {
         let program_id = spl_token::ID;
         let native_mint = spl_token::native_mint::ID;
 
-        let (amm_pool_id, pool_state) = get_pool_state(
-            self.client_blocking.clone().unwrap(),
-            self.pool_id.as_deref(),
-            Some(mint_str),
-        )
-        .await?;
+        let (amm_pool_id, pool_state) =
+            get_pool_state(self.client.clone(), self.pool_id.as_deref(), Some(mint_str)).await?;
         // debug!("pool_state: {:#?}", pool_state);
 
         let (token_in, token_out, user_input_token, swap_base_in) = match (
@@ -191,9 +176,9 @@ impl Raydium {
 
         let amm_program = Pubkey::from_str(AMM_PROGRAM)?;
         debug!("amm pool id: {amm_pool_id}");
-        let client = get_rpc_client_blocking()?;
+
         let swap_info_result = amm_cli::calculate_swap_info(
-            &client,
+            &self.client,
             amm_program,
             amm_pool_id,
             user_input_token,
@@ -223,8 +208,7 @@ impl Raydium {
             // get rent
             let rent = self
                 .client
-                .get_minimum_balance_for_rent_exemption(Account::LEN)
-                .await?;
+                .get_minimum_balance_for_rent_exemption(Account::LEN)?;
             // if buy add amount_specified
             let total_amount = if token_in == native_mint {
                 rent + amount_specified
@@ -306,7 +290,7 @@ impl Raydium {
             return Err(anyhow!("instructions is empty, no tx required"));
         }
 
-        tx::new_signed_and_send(&client, &self.keypair, instructions, use_jito).await
+        tx::new_signed_and_send(&self.client, &self.keypair, instructions, use_jito).await
     }
 }
 

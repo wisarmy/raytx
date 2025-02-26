@@ -1,11 +1,11 @@
 use std::{str::FromStr, sync::Arc};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use borsh::from_slice;
 use borsh_derive::{BorshDeserialize, BorshSerialize};
 use raydium_amm::math::U128;
 use serde::{Deserialize, Serialize};
-use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
@@ -40,24 +40,11 @@ pub const PUMP_SELL_METHOD: u64 = 12502976635542562355;
 pub struct Pump {
     pub client: Arc<RpcClient>,
     pub keypair: Arc<Keypair>,
-    pub client_blocking: Option<Arc<solana_client::rpc_client::RpcClient>>,
 }
 
 impl Pump {
     pub fn new(client: Arc<RpcClient>, keypair: Arc<Keypair>) -> Self {
-        Self {
-            client,
-            keypair,
-            client_blocking: None,
-        }
-    }
-
-    pub fn with_blocking_client(
-        &mut self,
-        client: Arc<solana_client::rpc_client::RpcClient>,
-    ) -> &mut Self {
-        self.client_blocking = Some(client);
-        self
+        Self { client, keypair }
     }
 
     pub async fn swap(
@@ -83,8 +70,7 @@ impl Pump {
         };
         let pump_program = Pubkey::from_str(PUMP_PROGRAM)?;
         let (bonding_curve, associated_bonding_curve, bonding_curve_account) =
-            get_bonding_curve_account(self.client_blocking.clone().unwrap(), &mint, &pump_program)
-                .await?;
+            get_bonding_curve_account(self.client.clone(), &mint, &pump_program).await?;
         let in_ata = get_associated_token_address(&owner, &token_in);
         let out_ata = get_associated_token_address(&owner, &token_out);
 
@@ -168,11 +154,6 @@ impl Pump {
             "swap: {}, value: {:?} -> {}",
             token_in, amount_ui_pretty, token_out
         );
-
-        let client = self
-            .client_blocking
-            .clone()
-            .context("failed to get rpc client")?;
 
         // Calculate tokens out
         let virtual_sol_reserves = U128::from(bonding_curve_account.virtual_sol_reserves);
@@ -267,7 +248,7 @@ impl Pump {
             return Err(anyhow!("instructions is empty, no tx required"));
         }
 
-        tx::new_signed_and_send(&client, &self.keypair, instructions, use_jito).await
+        tx::new_signed_and_send(&self.client, &self.keypair, instructions, use_jito).await
     }
 }
 

@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use raytx::{
-    get_rpc_client_blocking,
+    get_rpc_client,
     pump::{get_bonding_curve_account, get_pda, PUMP_PROGRAM},
 };
 use solana_sdk::pubkey::Pubkey;
@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
 }
 
 pub async fn get_bonding_curve_by_mint() -> Result<()> {
-    let client = get_rpc_client_blocking()?;
+    let client = get_rpc_client()?;
     let program_id = Pubkey::from_str(PUMP_PROGRAM)?;
     let mint = Pubkey::from_str("8oAK7mKMSnsVgrBgFS6A4uPqL8dh5NHAc7ohsq71pump")?;
     let bonding_curve = get_pda(&mint, &program_id)?;
