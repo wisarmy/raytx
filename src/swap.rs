@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::ValueEnum;
 use serde::Deserialize;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::{
     api::AppState,
@@ -47,25 +47,35 @@ pub async fn swap(
     let client = get_rpc_client()?;
     let wallet = state.wallet;
 
-    let swap_in_pump = get_pump_info(client.clone(), mint).await.map_or_else(
-        |err| {
-            warn!("failed to get_pump_info: {}", err);
-            false
-        },
-        |pump_info| !pump_info.complete,
-    );
+    let pump_info_result = get_pump_info(client.clone(), mint).await;
 
-    if swap_in_pump {
-        info!("swap in pump fun");
-        let swapx = pump::Pump::new(client, wallet);
-        swapx
-            .swap(mint, amount_in, swap_direction, in_type, slippage, use_jito)
-            .await
-    } else {
-        info!("swap in raydium");
-        let swapx = raydium::Raydium::new(client, wallet);
-        swapx
-            .swap(mint, amount_in, swap_direction, in_type, slippage, use_jito)
-            .await
+    println!("pump_info_result: {:#?}", pump_info_result);
+
+    match pump_info_result {
+        Ok(pump_info) => {
+            if !pump_info.complete {
+                // Pump token not completed, use original pump trading
+                info!("swap in pump fun (not completed)");
+                let swapx = pump::Pump::new(client, wallet);
+                swapx
+                    .swap(mint, amount_in, swap_direction, in_type, slippage, use_jito)
+                    .await
+            } else {
+                // Pump token completed, use pump amm trading
+                info!("swap in pump swap (completed), not support in pumpswap yet");
+                Err(anyhow::anyhow!(
+                    "Pump token {} is completed, not support swap in pumpswap yet",
+                    mint
+                ))
+            }
+        }
+        Err(_err) => {
+            // Not a pump token or failed to get pump info, use raydium
+            info!("swap in raydium");
+            let swapx = raydium::Raydium::new(client, wallet);
+            swapx
+                .swap(mint, amount_in, swap_direction, in_type, slippage, use_jito)
+                .await
+        }
     }
 }

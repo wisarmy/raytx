@@ -17,8 +17,9 @@ struct RpcRequest {
 #[derive(Deserialize, Debug)]
 pub struct RpcResponse {
     pub jsonrpc: String,
-    pub id: u32,
-    pub result: serde_json::Value,
+    pub id: Option<u32>,
+    pub result: Option<serde_json::Value>,
+    pub error: Option<serde_json::Value>,
 }
 
 pub async fn get_tip_accounts() -> Result<RpcResponse> {
@@ -52,8 +53,12 @@ pub struct TipAccountResult {
 impl TryFrom<RpcResponse> for TipAccountResult {
     type Error = anyhow::Error;
     fn try_from(value: RpcResponse) -> Result<Self, Self::Error> {
-        let accounts = value
-            .result
+        if let Some(error) = value.error {
+            return Err(anyhow::anyhow!("RPC error: {}", error));
+        }
+        
+        let result = value.result.context("missing 'result' field in response")?;
+        let accounts = result
             .as_array()
             .context("expected 'result' to be an array")?
             .iter()

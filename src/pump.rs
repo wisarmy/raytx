@@ -30,7 +30,7 @@ pub const TOKEN_PROGRAM: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 pub const RENT_PROGRAM: &str = "SysvarRent111111111111111111111111111111111";
 pub const ASSOCIATED_TOKEN_PROGRAM: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 pub const PUMP_GLOBAL: &str = "4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf";
-pub const PUMP_FEE_RECIPIENT: &str = "CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM";
+pub const PUMP_FEE_RECIPIENT: &str = "62qc2CNXwrYqQScmEdiZFFAnJR262PxWEuNQtxfafNgV";
 pub const PUMP_PROGRAM: &str = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 // pub const PUMP_FUN_MINT_AUTHORITY: &str = "TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM";
 pub const PUMP_ACCOUNT: &str = "Ce6TQqeHC9p8KetsN6JsjHK7UTZk7nasjjnr7XxXp9F1";
@@ -162,6 +162,9 @@ impl Pump {
             / bonding_curve_account.virtual_token_reserves as f64)
             / 1000.0;
 
+        let creator = Pubkey::new_from_array(bonding_curve_account.creator);
+        let creator_vault = get_creator_vault_pda(&creator, &pump_program)?;
+
         let (token_amount, sol_amount_threshold, input_accouts) = match swap_direction {
             SwapDirection::Buy => {
                 let max_sol_cost = max_amount_with_slippage(amount_specified, slippage_bps);
@@ -184,7 +187,7 @@ impl Pump {
                         AccountMeta::new(owner, true),
                         AccountMeta::new_readonly(system_program::id(), false),
                         AccountMeta::new_readonly(program_id, false),
-                        AccountMeta::new_readonly(Pubkey::from_str(RENT_PROGRAM)?, false),
+                        AccountMeta::new(creator_vault, false),
                         AccountMeta::new_readonly(Pubkey::from_str(PUMP_ACCOUNT)?, false),
                         AccountMeta::new_readonly(pump_program, false),
                     ],
@@ -211,10 +214,7 @@ impl Pump {
                         AccountMeta::new(in_ata, false),
                         AccountMeta::new(owner, true),
                         AccountMeta::new_readonly(system_program::id(), false),
-                        AccountMeta::new_readonly(
-                            Pubkey::from_str(ASSOCIATED_TOKEN_PROGRAM)?,
-                            false,
-                        ),
+                        AccountMeta::new_readonly(creator_vault, false),
                         AccountMeta::new_readonly(program_id, false),
                         AccountMeta::new_readonly(Pubkey::from_str(PUMP_ACCOUNT)?, false),
                         AccountMeta::new_readonly(pump_program, false),
@@ -294,6 +294,7 @@ pub struct BondingCurveAccount {
     pub real_sol_reserves: u64,
     pub token_total_supply: u64,
     pub complete: bool,
+    pub creator: [u8; 32],
 }
 
 pub async fn get_bonding_curve_account(
@@ -312,14 +313,15 @@ pub async fn get_bonding_curve_account(
             );
         })?;
 
-    let bonding_curve_account =
-        from_slice::<BondingCurveAccount>(&bonding_curve_data).map_err(|e| {
+    let bonding_curve_account = from_slice::<BondingCurveAccount>(&bonding_curve_data[..81])
+        .map_err(|e| {
             anyhow!(
                 "Failed to deserialize bonding curve account: {}",
                 e.to_string()
             )
         })?;
 
+    // println!("{:?}", bonding_curve_account);
     Ok((
         bonding_curve,
         associated_bonding_curve,
@@ -331,6 +333,12 @@ pub fn get_pda(mint: &Pubkey, program_id: &Pubkey) -> Result<Pubkey> {
     let seeds = [b"bonding-curve".as_ref(), mint.as_ref()];
     let (bonding_curve, _bump) = Pubkey::find_program_address(&seeds, program_id);
     Ok(bonding_curve)
+}
+
+pub fn get_creator_vault_pda(creator: &Pubkey, program_id: &Pubkey) -> Result<Pubkey> {
+    let seeds = [b"creator-vault".as_ref(), creator.as_ref()];
+    let (creator_vault, _bump) = Pubkey::find_program_address(&seeds, program_id);
+    Ok(creator_vault)
 }
 
 // https://frontend-api.pump.fun/coins/8zSLdDzM1XsqnfrHmHvA9ir6pvYDjs8UXz6B2Tydd6b2
