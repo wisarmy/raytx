@@ -48,3 +48,4 @@ ctor = "0.2.8"
 
 [features]
 slow_tests = []
+used_linker = []

@@ -55,16 +55,16 @@ pub async fn swap(
         Ok(pump_info) => {
             if !pump_info.complete {
                 // Pump token not completed, use original pump trading
-                info!("swap in pump fun (not completed)");
+                info!("swap in pump fun");
                 let swapx = pump::Pump::new(client, wallet);
                 swapx
                     .swap(mint, amount_in, swap_direction, in_type, slippage, use_jito)
                     .await
             } else {
                 // Pump token completed, use pump amm trading
-                info!("swap in pump swap (completed), not support in pumpswap yet");
+                // info!("swap in pump amm");
                 Err(anyhow::anyhow!(
-                    "Pump token {} is completed, not support swap in pumpswap yet",
+                    "Pump token {} is completed, not support swap in pump amm yet",
                     mint
                 ))
             }
